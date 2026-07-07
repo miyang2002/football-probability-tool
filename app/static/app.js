@@ -21,6 +21,19 @@ const nodes = {
   parlayResults: document.querySelector("#parlay-results"),
 };
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value).replaceAll("`", "&#96;");
+}
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -42,9 +55,9 @@ function renderMatches() {
   nodes.matchList.innerHTML = state.matches
     .map(
       (match) => `
-        <button class="match-row ${match.match_id === state.selectedMatchId ? "active" : ""}" data-match-id="${match.match_id}">
-          <strong>${match.home.name} vs ${match.away.name}</strong>
-          <div>${match.competition}</div>
+        <button class="match-row ${match.match_id === state.selectedMatchId ? "active" : ""}" data-match-id="${escapeAttribute(match.match_id)}">
+          <strong>${escapeHtml(match.home.name)} vs ${escapeHtml(match.away.name)}</strong>
+          <div>${escapeHtml(match.competition)}</div>
           <span class="pill">数据质量 ${pct(match.context.data_quality)}</span>
         </button>
       `,
@@ -59,11 +72,11 @@ function renderRecommendation(analysis) {
     return;
   }
   nodes.recommendationSummary.innerHTML = `
-    <h2>${labelSelection(pick.selection)}</h2>
-    <p>市场：${pick.market}</p>
+    <h2>${escapeHtml(labelSelection(pick.selection))}</h2>
+    <p>市场：${escapeHtml(pick.market)}</p>
     <p>模型概率：${pct(pick.model_probability)}</p>
     <p>期望值：${pick.expected_value === null ? "无赔率" : pct(pick.expected_value)}</p>
-    <p>风险：${pick.risk}</p>
+    <p>风险：${escapeHtml(pick.risk)}</p>
   `;
 }
 
@@ -105,10 +118,10 @@ function renderParlays(parlays) {
     .map(
       (parlay) => `
         <article class="parlay-card">
-          <h3>${parlay.leg_count}串1 · ${parlay.risk}</h3>
+          <h3>${parlay.leg_count}串1 · ${escapeHtml(parlay.risk)}</h3>
           <p>命中率 ${pct(parlay.combined_probability)} · 总赔率 ${parlay.combined_odds.toFixed(2)} · EV ${pct(parlay.expected_value)}</p>
-          <p>${parlay.explanation}</p>
-          ${parlay.legs.map((leg) => `<div>${leg.label} · ${pct(leg.probability)} · ${leg.decimal_odds.toFixed(2)}</div>`).join("")}
+          <p>${escapeHtml(parlay.explanation)}</p>
+          ${parlay.legs.map((leg) => `<div>${escapeHtml(leg.label)} · ${pct(leg.probability)} · ${leg.decimal_odds.toFixed(2)}</div>`).join("")}
         </article>
       `,
     )
@@ -155,5 +168,5 @@ document.querySelectorAll("[data-strategy]").forEach((button) => {
 nodes.refreshButton.addEventListener("click", loadMatches);
 
 loadMatches().catch((error) => {
-  document.body.insertAdjacentHTML("afterbegin", `<div class="panel">加载失败：${error.message}</div>`);
+  document.body.insertAdjacentHTML("afterbegin", `<div class="panel">加载失败：${escapeHtml(error.message)}</div>`);
 });

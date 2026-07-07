@@ -2,12 +2,25 @@ export function pct(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value).replaceAll("`", "&#96;");
+}
+
 export function renderBars(node, rows, color = "var(--green)") {
   node.innerHTML = rows
     .map(
       (row) => `
         <div class="chart-row">
-          <div>${row.label}</div>
+          <div>${escapeHtml(row.label)}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.max(0, Math.min(100, row.value * 100))}%; background:${color}"></div></div>
           <strong>${pct(row.value)}</strong>
         </div>
@@ -17,13 +30,26 @@ export function renderBars(node, rows, color = "var(--green)") {
 }
 
 export function renderHeatmap(node, scores) {
+  if (!scores.length) {
+    node.innerHTML = "<p>暂无比分分布。</p>";
+    return;
+  }
   const maxProbability = Math.max(...scores.map((item) => item.probability));
+  if (maxProbability <= 0) {
+    node.innerHTML = "<p>暂无有效比分分布。</p>";
+    return;
+  }
   const visible = scores.filter((item) => item.home_goals <= 8 && item.away_goals <= 8);
+  if (!visible.length) {
+    node.innerHTML = "<p>暂无可显示比分分布。</p>";
+    return;
+  }
   node.innerHTML = `<div class="heatmap">${visible
     .map((item) => {
       const intensity = item.probability / maxProbability;
       const alpha = 0.12 + intensity * 0.78;
-      return `<div class="heat-cell" style="background: rgba(34, 122, 92, ${alpha})" title="${item.home_goals}-${item.away_goals} ${pct(item.probability)}">${item.home_goals}-${item.away_goals}<br>${pct(item.probability)}</div>`;
+      const label = `${item.home_goals}-${item.away_goals}`;
+      return `<div class="heat-cell" style="background: rgba(34, 122, 92, ${alpha})" title="${escapeAttribute(`${label} ${pct(item.probability)}`)}">${escapeHtml(label)}<br>${pct(item.probability)}</div>`;
     })
     .join("")}</div>`;
 }

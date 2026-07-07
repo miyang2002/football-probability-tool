@@ -175,6 +175,10 @@ p {
   gap: 4px;
 }
 
+#score-heatmap {
+  overflow-x: auto;
+}
+
 .heat-cell {
   min-height: 38px;
   border-radius: 6px;
