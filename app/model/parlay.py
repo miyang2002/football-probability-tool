@@ -6,6 +6,7 @@ from app.domain import ParlayLeg, ParlayRecommendation, PickRecommendation, Risk
 
 
 RISK_SCORE = {"low": 1.0, "medium": 0.6, "high": 0.25}
+VALID_STRATEGIES = {"conservative", "balanced", "return_seeking"}
 
 
 def score_pick(pick: PickRecommendation, strategy: StrategyName) -> float:
@@ -36,6 +37,11 @@ def build_parlays(
     strategy: StrategyName = "balanced",
     max_legs: int = 4,
 ) -> list[ParlayRecommendation]:
+    if strategy not in VALID_STRATEGIES:
+        raise ValueError("strategy must be conservative, balanced, or return_seeking")
+    if not isinstance(max_legs, int) or isinstance(max_legs, bool) or not 2 <= max_legs <= 6:
+        raise ValueError("max_legs must be an integer between 2 and 6")
+
     eligible = [
         pick
         for pick in picks

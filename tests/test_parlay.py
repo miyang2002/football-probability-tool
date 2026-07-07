@@ -1,3 +1,5 @@
+import pytest
+
 from app.domain import PickRecommendation
 from app.model.parlay import build_parlays
 
@@ -59,3 +61,37 @@ def test_optimizer_keeps_only_one_pick_per_match():
 
     assert [leg.match_id for leg in parlay.legs].count("same") == 1
     assert {leg.match_id for leg in parlay.legs} == {"same", "other"}
+
+
+def test_empty_picks_return_no_parlays():
+    assert build_parlays([], strategy="balanced", max_legs=4) == []
+
+
+def test_one_eligible_pick_returns_no_parlays():
+    picks = [pick("m1", 0.62, 1.9, 0.09, "low")]
+
+    assert build_parlays(picks, strategy="balanced", max_legs=4) == []
+
+
+def test_fewer_unique_matches_than_requested_returns_available_leg_counts():
+    picks = [
+        pick("m1", 0.62, 1.9, 0.09, "low"),
+        pick("m2", 0.59, 2.0, 0.08, "medium"),
+        pick("m3", 0.55, 2.2, 0.07, "medium"),
+    ]
+
+    parlays = build_parlays(picks, strategy="balanced", max_legs=6)
+
+    assert [item.leg_count for item in parlays] == [2, 3]
+
+
+@pytest.mark.parametrize("strategy", ["", "aggressive", None])
+def test_invalid_strategy_raises_even_without_eligible_picks(strategy):
+    with pytest.raises(ValueError):
+        build_parlays([], strategy=strategy, max_legs=4)
+
+
+@pytest.mark.parametrize("max_legs", [1, 7, 2.5, True])
+def test_invalid_max_legs_raises(max_legs):
+    with pytest.raises(ValueError):
+        build_parlays([pick("m1", 0.62, 1.9, 0.09, "low"), pick("m2", 0.59, 2.0, 0.08, "medium")], max_legs=max_legs)
