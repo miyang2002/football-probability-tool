@@ -1,6 +1,17 @@
-from math import exp, factorial
+from math import exp, factorial, isfinite
 
 from app.domain import MarketProbability, MatchInput, ScoreProbability
+
+
+PROBABILITY_EPSILON = 1e-12
+
+
+def bounded_probability(probability: float) -> float:
+    if not isfinite(probability):
+        raise ValueError("probability must be finite")
+    if probability < -PROBABILITY_EPSILON or probability > 1.0 + PROBABILITY_EPSILON:
+        raise ValueError("probability must be between 0 and 1")
+    return min(1.0, max(0.0, probability))
 
 
 def estimate_expected_goals(match: MatchInput) -> tuple[float, float]:
@@ -23,20 +34,27 @@ def poisson_probability(goals: int, expected_goals: float) -> float:
 
 
 def poisson_score_matrix(home_xg: float, away_xg: float, max_goals: int = 8) -> list[ScoreProbability]:
-    raw: list[ScoreProbability] = []
+    if not isfinite(home_xg) or not isfinite(away_xg) or home_xg < 0 or away_xg < 0:
+        raise ValueError("expected goals must be finite and non-negative")
+    if not isinstance(max_goals, int) or isinstance(max_goals, bool) or max_goals <= 0:
+        raise ValueError("max_goals must be a positive integer")
+
+    raw: list[tuple[int, int, float]] = []
     for home_goals in range(max_goals + 1):
         for away_goals in range(max_goals + 1):
             probability = poisson_probability(home_goals, home_xg) * poisson_probability(away_goals, away_xg)
-            raw.append(ScoreProbability(home_goals=home_goals, away_goals=away_goals, probability=probability))
+            raw.append((home_goals, away_goals, probability))
 
-    total = sum(item.probability for item in raw)
+    total = sum(probability for _, _, probability in raw)
+    if not isfinite(total) or total <= 0:
+        raise ValueError("score matrix has no finite probability mass")
     return [
         ScoreProbability(
-            home_goals=item.home_goals,
-            away_goals=item.away_goals,
-            probability=item.probability / total,
+            home_goals=home_goals,
+            away_goals=away_goals,
+            probability=bounded_probability(probability / total),
         )
-        for item in raw
+        for home_goals, away_goals, probability in raw
     ]
 
 
@@ -48,26 +66,38 @@ def aggregate_score_matrix(matrix: list[ScoreProbability]) -> dict[str, list[Mar
     total_goals: list[MarketProbability] = []
     for total in range(5):
         probability = sum(item.probability for item in matrix if item.home_goals + item.away_goals == total)
-        total_goals.append(MarketProbability(market="total_goals", selection=str(total), probability=probability))
+        total_goals.append(
+            MarketProbability(market="total_goals", selection=str(total), probability=bounded_probability(probability))
+        )
     total_goals.append(
         MarketProbability(
             market="total_goals",
             selection="5+",
-            probability=sum(item.probability for item in matrix if item.home_goals + item.away_goals >= 5),
+            probability=bounded_probability(
+                sum(item.probability for item in matrix if item.home_goals + item.away_goals >= 5)
+            ),
         )
     )
 
     over_under = []
     for line in (1.5, 2.5, 3.5):
         over = sum(item.probability for item in matrix if item.home_goals + item.away_goals > line)
-        over_under.append(MarketProbability(market="over_under", selection=f"over_{line}", probability=over))
-        over_under.append(MarketProbability(market="over_under", selection=f"under_{line}", probability=1.0 - over))
+        over_under.append(
+            MarketProbability(market="over_under", selection=f"over_{line}", probability=bounded_probability(over))
+        )
+        over_under.append(
+            MarketProbability(
+                market="over_under",
+                selection=f"under_{line}",
+                probability=bounded_probability(1.0 - bounded_probability(over)),
+            )
+        )
 
     return {
         "winner": [
-            MarketProbability(market="winner", selection="home", probability=home),
-            MarketProbability(market="winner", selection="draw", probability=draw),
-            MarketProbability(market="winner", selection="away", probability=away),
+            MarketProbability(market="winner", selection="home", probability=bounded_probability(home)),
+            MarketProbability(market="winner", selection="draw", probability=bounded_probability(draw)),
+            MarketProbability(market="winner", selection="away", probability=bounded_probability(away)),
         ],
         "total_goals": total_goals,
         "over_under": over_under,
