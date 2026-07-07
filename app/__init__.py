@@ -1,0 +1,1 @@
+"""Football probability analysis application."""
