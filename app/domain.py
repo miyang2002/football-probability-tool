@@ -91,7 +91,7 @@ class ParlayRequest(BaseModel):
 class ParlayLeg(BaseModel):
     match_id: str
     label: str
-    market: str
+    market: MarketName
     selection: str
     probability: float = Field(ge=0, le=1)
     decimal_odds: float = Field(gt=1)

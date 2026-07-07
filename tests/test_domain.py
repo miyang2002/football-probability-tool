@@ -301,6 +301,35 @@ def test_parlay_leg_allows_negative_edge():
     assert leg.edge == -0.05
 
 
+def test_parlay_leg_rejects_unknown_market():
+    with pytest.raises(ValidationError):
+        ParlayLeg(
+            match_id="m1",
+            label="Corners over",
+            market="corners",
+            selection="over_9.5",
+            probability=0.55,
+            decimal_odds=2.0,
+            edge=0.04,
+            risk="medium",
+        )
+
+
+def test_parlay_leg_accepts_over_under_market():
+    leg = ParlayLeg(
+        match_id="m1",
+        label="Over 2.5",
+        market="over_under",
+        selection="over_2.5",
+        probability=0.55,
+        decimal_odds=2.0,
+        edge=0.04,
+        risk="medium",
+    )
+
+    assert leg.market == "over_under"
+
+
 def test_parlay_recommendation_rejects_combined_probability_above_one():
     with pytest.raises(ValidationError):
         ParlayRecommendation(
