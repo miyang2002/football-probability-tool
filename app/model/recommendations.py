@@ -74,9 +74,10 @@ def primary_probability_floor(market: str) -> float:
 
 
 def recommendation_sort_key(pick: PickRecommendation) -> tuple[int, float, float]:
+    has_priced_market = pick.decimal_odds is not None
     primary_candidate = pick.model_probability >= primary_probability_floor(pick.market)
     value_score = pick.expected_value if pick.expected_value is not None else -1.0
-    return (1 if primary_candidate else 0, pick.model_probability, value_score)
+    return (1 if has_priced_market else 0, 1 if primary_candidate else 0, pick.model_probability, value_score)
 
 
 def build_recommendations(

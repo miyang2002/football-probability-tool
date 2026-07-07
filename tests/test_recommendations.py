@@ -49,6 +49,28 @@ def test_low_probability_longshot_does_not_become_primary_pick_from_odds_value_o
     assert picks[-1].expected_value > 0
 
 
+def test_priced_winner_pick_outranks_unpriced_model_market_for_primary_recommendation():
+    markets = [
+        MarketProbability(market="winner", selection="home", probability=0.43),
+        MarketProbability(market="winner", selection="draw", probability=0.26),
+        MarketProbability(market="winner", selection="away", probability=0.31),
+        MarketProbability(market="over_under", selection="over_1.5", probability=0.74),
+    ]
+    odds = [
+        OddsQuote(market="winner", selection="home", decimal_odds=2.22),
+        OddsQuote(market="winner", selection="draw", decimal_odds=3.20),
+        OddsQuote(market="winner", selection="away", decimal_odds=3.10),
+    ]
+
+    picks = build_recommendations("m1", markets, odds, MatchContext(data_quality=0.85))
+
+    assert picks[0].market == "winner"
+    assert picks[0].selection == "home"
+    assert picks[0].decimal_odds == 2.22
+    assert picks[0].value_label != "没有赔率，无法判断"
+    assert any(pick.market == "over_under" and pick.decimal_odds is None for pick in picks)
+
+
 def test_low_data_quality_adds_warning():
     markets = [MarketProbability(market="winner", selection="home", probability=0.54)]
     odds = [OddsQuote(market="winner", selection="home", decimal_odds=2.0)]
@@ -106,7 +128,7 @@ def test_confidence_is_bounded():
     assert picks[0].confidence == 0.95
 
 
-def test_sorting_prioritizes_primary_probability_before_odds_value():
+def test_sorting_prioritizes_priced_market_before_unpriced_model_pick():
     markets = [
         MarketProbability(market="winner", selection="home", probability=0.55),
         MarketProbability(market="winner", selection="draw", probability=0.60),
@@ -119,4 +141,4 @@ def test_sorting_prioritizes_primary_probability_before_odds_value():
 
     picks = build_recommendations("m1", markets, odds, MatchContext())
 
-    assert [pick.selection for pick in picks] == ["draw", "home", "away"]
+    assert [pick.selection for pick in picks] == ["home", "away", "draw"]
