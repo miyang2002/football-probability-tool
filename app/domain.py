@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-MarketName = Literal["winner", "total_goals", "half_time", "score"]
+MarketName = Literal["winner", "total_goals", "over_under", "half_time", "score"]
 StrategyName = Literal["conservative", "balanced", "return_seeking"]
 RiskLevel = Literal["low", "medium", "high"]
 
@@ -43,27 +43,27 @@ class MatchInput(BaseModel):
 
 
 class ScoreProbability(BaseModel):
-    home_goals: int
-    away_goals: int
-    probability: float
+    home_goals: int = Field(ge=0)
+    away_goals: int = Field(ge=0)
+    probability: float = Field(ge=0, le=1)
 
 
 class MarketProbability(BaseModel):
-    market: str
+    market: MarketName
     selection: str
-    probability: float
+    probability: float = Field(ge=0, le=1)
 
 
 class PickRecommendation(BaseModel):
     match_id: str
-    market: str
+    market: MarketName
     selection: str
-    model_probability: float
-    decimal_odds: float | None = None
-    implied_probability: float | None = None
-    edge: float | None = None
-    expected_value: float | None = None
-    confidence: float
+    model_probability: float = Field(ge=0, le=1)
+    decimal_odds: float | None = Field(default=None, gt=1)
+    implied_probability: float | None = Field(default=None, ge=0, le=1)
+    edge: float | None = Field(default=None, ge=-1, le=1)
+    expected_value: float | None = Field(default=None, ge=-1)
+    confidence: float = Field(ge=0, le=1)
     risk: RiskLevel
     reasons: list[str]
     warnings: list[str]
@@ -71,8 +71,8 @@ class PickRecommendation(BaseModel):
 
 class MatchAnalysis(BaseModel):
     match: MatchInput
-    expected_home_goals: float
-    expected_away_goals: float
+    expected_home_goals: float = Field(ge=0)
+    expected_away_goals: float = Field(ge=0)
     winner_probabilities: list[MarketProbability]
     half_time_probabilities: list[MarketProbability]
     total_goal_probabilities: list[MarketProbability]
@@ -80,7 +80,7 @@ class MatchAnalysis(BaseModel):
     score_probabilities: list[ScoreProbability]
     top_scores: list[ScoreProbability]
     recommendations: list[PickRecommendation]
-    data_quality: float
+    data_quality: float = Field(ge=0, le=1)
 
 
 class ParlayRequest(BaseModel):
@@ -93,9 +93,9 @@ class ParlayLeg(BaseModel):
     label: str
     market: str
     selection: str
-    probability: float
-    decimal_odds: float
-    edge: float
+    probability: float = Field(ge=0, le=1)
+    decimal_odds: float = Field(gt=1)
+    edge: float = Field(ge=-1, le=1)
     risk: RiskLevel
 
 
@@ -103,8 +103,8 @@ class ParlayRecommendation(BaseModel):
     strategy: StrategyName
     leg_count: int
     legs: list[ParlayLeg]
-    combined_probability: float
-    combined_odds: float
-    expected_value: float
+    combined_probability: float = Field(ge=0, le=1)
+    combined_odds: float = Field(gt=1)
+    expected_value: float = Field(ge=-1)
     risk: RiskLevel
     explanation: str
