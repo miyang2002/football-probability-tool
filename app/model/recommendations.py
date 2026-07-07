@@ -15,6 +15,14 @@ def confidence_from_probability(probability: float, context: MatchContext) -> fl
     return round(min(0.95, probability * 0.75 + context.data_quality * 0.25), 4)
 
 
+def recommendation_sort_key(pick: PickRecommendation) -> tuple[int, float, float]:
+    if pick.expected_value is None:
+        return (1, pick.model_probability, 0.0)
+    if pick.expected_value >= 0:
+        return (2, pick.expected_value, pick.model_probability)
+    return (0, pick.expected_value, pick.model_probability)
+
+
 def build_recommendations(
     match_id: str,
     markets: list[MarketProbability],
@@ -37,6 +45,8 @@ def build_recommendations(
             reasons.append(f"Model edge versus raw implied probability is {edge:.1%}.")
         if ev is not None:
             reasons.append(f"Expected value is {ev:.1%}.")
+        else:
+            warnings.append("No odds available; edge and expected value were not calculated.")
         if context.data_quality < 0.6:
             warnings.append("Data quality is low, so this pick needs manual review.")
         if context.lineup_uncertainty > 0.45:
@@ -59,11 +69,4 @@ def build_recommendations(
             )
         )
 
-    return sorted(
-        picks,
-        key=lambda pick: (
-            pick.expected_value if pick.expected_value is not None else -1,
-            pick.model_probability,
-        ),
-        reverse=True,
-    )
+    return sorted(picks, key=recommendation_sort_key, reverse=True)

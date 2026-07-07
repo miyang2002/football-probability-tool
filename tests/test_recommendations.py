@@ -40,6 +40,7 @@ def test_missing_odds_keeps_pick_without_price_metrics():
     assert picks[0].implied_probability is None
     assert picks[0].edge is None
     assert picks[0].expected_value is None
+    assert any("No odds available" in warning for warning in picks[0].warnings)
 
 
 def test_negative_edge_and_expected_value_are_allowed():
@@ -60,3 +61,19 @@ def test_confidence_is_bounded():
     picks = build_recommendations("m1", markets, [], MatchContext(data_quality=1.0))
 
     assert picks[0].confidence == 0.95
+
+
+def test_sorting_keeps_negative_expected_value_below_unknown_value():
+    markets = [
+        MarketProbability(market="winner", selection="home", probability=0.55),
+        MarketProbability(market="winner", selection="draw", probability=0.60),
+        MarketProbability(market="winner", selection="away", probability=0.01),
+    ]
+    odds = [
+        OddsQuote(market="winner", selection="home", decimal_odds=2.1),
+        OddsQuote(market="winner", selection="away", decimal_odds=2.0),
+    ]
+
+    picks = build_recommendations("m1", markets, odds, MatchContext())
+
+    assert [pick.selection for pick in picks] == ["home", "draw", "away"]
