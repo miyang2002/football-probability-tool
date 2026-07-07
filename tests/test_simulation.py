@@ -1,0 +1,40 @@
+import pytest
+
+from app.model.simulation import run_simulation
+
+
+def test_simulation_is_seeded_and_counts_trials():
+    result_a = run_simulation(1.4, 1.1, trials=1000, seed=7)
+    result_b = run_simulation(1.4, 1.1, trials=1000, seed=7)
+
+    assert result_a == result_b
+    assert sum(result_a["winner"].values()) == 1000
+    assert sum(result_a["total_goals"].values()) == 1000
+
+
+def test_simulation_returns_probability_maps():
+    result = run_simulation(1.4, 1.1, trials=1000, seed=3)
+
+    assert set(result["winner_probability"]) == {"home", "draw", "away"}
+    assert round(sum(result["winner_probability"].values()), 6) == 1.0
+    assert "1-1" in result["score_probability"]
+
+
+@pytest.mark.parametrize(
+    ("home_xg", "away_xg"),
+    [
+        (-0.01, 1.1),
+        (1.4, -0.01),
+        (float("nan"), 1.1),
+        (1.4, float("inf")),
+    ],
+)
+def test_simulation_rejects_invalid_expected_goals(home_xg, away_xg):
+    with pytest.raises(ValueError):
+        run_simulation(home_xg, away_xg, trials=1000, seed=3)
+
+
+@pytest.mark.parametrize("trials", [0, -1, 1.5, True])
+def test_simulation_rejects_invalid_trials(trials):
+    with pytest.raises(ValueError):
+        run_simulation(1.4, 1.1, trials=trials, seed=3)
