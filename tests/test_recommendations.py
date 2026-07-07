@@ -31,6 +31,21 @@ def test_low_data_quality_adds_warning():
     assert any("Data quality" in warning for warning in picks[0].warnings)
 
 
+def test_high_tactical_uncertainty_adds_warning():
+    markets = [MarketProbability(market="winner", selection="home", probability=0.54)]
+    odds = [OddsQuote(market="winner", selection="home", decimal_odds=2.0)]
+
+    picks = build_recommendations(
+        "m1",
+        markets,
+        odds,
+        MatchContext(data_quality=0.8, lineup_uncertainty=0.2, tactical_uncertainty=1.0),
+    )
+
+    assert picks[0].risk == "high"
+    assert any("Tactical uncertainty" in warning for warning in picks[0].warnings)
+
+
 def test_missing_odds_keeps_pick_without_price_metrics():
     markets = [MarketProbability(market="winner", selection="home", probability=0.54)]
 

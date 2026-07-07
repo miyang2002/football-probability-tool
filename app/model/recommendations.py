@@ -51,6 +51,8 @@ def build_recommendations(
             warnings.append("Data quality is low, so this pick needs manual review.")
         if context.lineup_uncertainty > 0.45:
             warnings.append("Lineup uncertainty is elevated.")
+        if context.tactical_uncertainty > 0.45:
+            warnings.append("Tactical uncertainty is elevated.")
 
         picks.append(
             PickRecommendation(
