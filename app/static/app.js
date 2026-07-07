@@ -4,10 +4,12 @@ const state = {
   matches: [],
   selectedMatchId: null,
   strategy: "balanced",
+  window: "next",
 };
 
 const nodes = {
   matchList: document.querySelector("#match-list"),
+  feedStatus: document.querySelector("#feed-status"),
   refreshButton: document.querySelector("#refresh-button"),
   recommendationSummary: document.querySelector("#recommendation-summary"),
   winnerBars: document.querySelector("#winner-bars"),
@@ -51,14 +53,72 @@ function labelSelection(selection) {
   return labels[selection] || selection.replace("_", " ");
 }
 
+function formatKickoff(value) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
+function movementClass(movement) {
+  if (movement === "up") return "odds-move-up";
+  if (movement === "down") return "odds-move-down";
+  return "odds-move-flat";
+}
+
+function movementMark(movement) {
+  if (movement === "up") return "↑";
+  if (movement === "down") return "↓";
+  return "→";
+}
+
+function renderOddsMovement(match) {
+  const winnerOdds = match.odds.filter((quote) => quote.market === "winner");
+  if (!winnerOdds.length) {
+    return '<div class="odds-strip muted">暂无胜平负赔率</div>';
+  }
+  return `
+    <div class="odds-strip">
+      ${winnerOdds
+        .map(
+          (quote) => `
+            <span class="odds-chip ${movementClass(quote.movement)}">
+              ${escapeHtml(labelSelection(quote.selection))} ${Number(quote.decimal_odds).toFixed(2)} ${escapeHtml(movementMark(quote.movement))}
+            </span>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderFeedStatus(status) {
+  const healthClass = status.healthy ? "healthy" : "unhealthy";
+  const fallback = status.using_fallback ? " · fallback" : "";
+  nodes.feedStatus.innerHTML = `
+    <span class="feed-dot ${healthClass}"></span>
+    <span>${escapeHtml(status.source)}${fallback}</span>
+    <span>${escapeHtml(status.message)}</span>
+    ${status.last_success_at ? `<span>${escapeHtml(formatKickoff(status.last_success_at))}</span>` : ""}
+  `;
+}
+
 function renderMatches() {
+  if (!state.matches.length) {
+    nodes.matchList.innerHTML = '<p class="empty-state">当前窗口没有未开赛比赛。</p>';
+    return;
+  }
   nodes.matchList.innerHTML = state.matches
     .map(
       (match) => `
         <button class="match-row ${match.match_id === state.selectedMatchId ? "active" : ""}" data-match-id="${escapeAttribute(match.match_id)}">
           <strong>${escapeHtml(match.home.name)} vs ${escapeHtml(match.away.name)}</strong>
-          <div>${escapeHtml(match.competition)}</div>
+          <div>${escapeHtml(match.competition)} · ${escapeHtml(formatKickoff(match.kickoff_utc))}</div>
           <span class="pill">数据质量 ${pct(match.context.data_quality)}</span>
+          ${renderOddsMovement(match)}
         </button>
       `,
     )
@@ -134,18 +194,31 @@ async function loadAnalysis(matchId) {
 }
 
 async function loadParlays() {
-  const parlays = await fetchJson(`/api/parlays?strategy=${state.strategy}`);
+  const parlays = await fetchJson(`/api/parlays?strategy=${state.strategy}&window=${state.window}`);
   renderParlays(parlays);
 }
 
+async function loadFeedStatus() {
+  const status = await fetchJson("/api/feed/status");
+  renderFeedStatus(status);
+}
+
 async function loadMatches() {
-  state.matches = await fetchJson("/api/matches");
-  state.selectedMatchId = state.selectedMatchId || state.matches[0]?.match_id;
+  state.matches = await fetchJson(`/api/matches?window=${state.window}`);
+  const selectedStillVisible = state.matches.some((match) => match.match_id === state.selectedMatchId);
+  state.selectedMatchId = selectedStillVisible ? state.selectedMatchId : state.matches[0]?.match_id;
   renderMatches();
   if (state.selectedMatchId) {
     await loadAnalysis(state.selectedMatchId);
+  } else {
+    nodes.recommendationSummary.innerHTML = "<p>没有可分析的未开赛比赛。</p>";
   }
   await loadParlays();
+}
+
+async function refreshLiveData() {
+  await loadFeedStatus();
+  await loadMatches();
 }
 
 nodes.matchList.addEventListener("click", async (event) => {
@@ -165,8 +238,20 @@ document.querySelectorAll("[data-strategy]").forEach((button) => {
   });
 });
 
-nodes.refreshButton.addEventListener("click", loadMatches);
+document.querySelectorAll("[data-window]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    document.querySelectorAll("[data-window]").forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    state.window = button.dataset.window;
+    state.selectedMatchId = null;
+    await refreshLiveData();
+  });
+});
 
-loadMatches().catch((error) => {
+nodes.refreshButton.addEventListener("click", refreshLiveData);
+
+setInterval(refreshLiveData, 30_000);
+
+refreshLiveData().catch((error) => {
   document.body.insertAdjacentHTML("afterbegin", `<div class="panel">加载失败：${escapeHtml(error.message)}</div>`);
 });

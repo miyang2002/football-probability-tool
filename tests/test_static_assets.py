@@ -17,6 +17,8 @@ def test_index_contains_visual_regions():
     assert "match-list" in html
     assert "score-heatmap" in html
     assert "parlay-results" in html
+    assert "feed-status" in html
+    assert "match-window" in html
 
 
 def test_chart_helpers_export_functions():
@@ -38,6 +40,7 @@ def test_frontend_escapes_dynamic_html_and_attributes():
     assert 'data-match-id="${escapeAttribute(match.match_id)}"' in app_js
     assert "${escapeHtml(match.home.name)} vs ${escapeHtml(match.away.name)}" in app_js
     assert "${escapeHtml(match.competition)}" in app_js
+    assert "${escapeHtml(status.message)}" in app_js
     assert "${escapeHtml(parlay.explanation)}" in app_js
     assert "${escapeHtml(leg.label)}" in app_js
     assert "${escapeHtml(row.label)}" in charts_js
@@ -53,3 +56,18 @@ def test_heatmap_handles_zero_probability_and_mobile_overflow():
     assert "NaN" not in charts_js
     assert "#score-heatmap" in css
     assert "overflow-x: auto" in css
+
+
+def test_frontend_auto_refreshes_feed_and_displays_odds_movement():
+    html = (STATIC / "index.html").read_text()
+    app_js = (STATIC / "app.js").read_text()
+    css = (STATIC / "styles.css").read_text()
+
+    assert 'data-window="next"' in html
+    assert 'data-window="tomorrow"' in html
+    assert "setInterval(refreshLiveData, 30_000)" in app_js
+    assert "function renderOddsMovement" in app_js
+    assert "odds-move-up" in app_js
+    assert "odds-move-down" in app_js
+    assert ".odds-move-up" in css
+    assert ".odds-move-down" in css

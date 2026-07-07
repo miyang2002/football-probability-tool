@@ -12,13 +12,22 @@
         <h1>足球概率分析</h1>
         <p>胜平负、比分、进球数、半场和串关策略</p>
       </div>
-      <button id="refresh-button" class="icon-button" title="刷新比赛" aria-label="刷新比赛">↻</button>
+      <div class="top-actions">
+        <div id="feed-status" class="feed-status">数据源加载中</div>
+        <button id="refresh-button" class="icon-button" title="刷新比赛" aria-label="刷新比赛">↻</button>
+      </div>
     </header>
 
     <main class="layout">
       <aside class="sidebar">
         <div class="panel">
-          <div class="panel-title">今日比赛</div>
+          <div class="panel-title">未开赛比赛</div>
+          <div id="match-window" class="segmented window-controls">
+            <button data-window="next" class="active">下一比赛日</button>
+            <button data-window="tomorrow">明天</button>
+            <button data-window="3d">3天</button>
+            <button data-window="7d">7天</button>
+          </div>
           <div id="match-list" class="match-list"></div>
         </div>
       </aside>
