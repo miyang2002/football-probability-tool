@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>足球概率分析工具</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>足球概率分析</h1>
+        <p>胜平负、比分、进球数、半场和串关策略</p>
+      </div>
+      <button id="refresh-button" class="icon-button" title="刷新比赛" aria-label="刷新比赛">↻</button>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <div class="panel">
+          <div class="panel-title">今日比赛</div>
+          <div id="match-list" class="match-list"></div>
+        </div>
+      </aside>
+
+      <section class="content">
+        <section class="summary-grid">
+          <div class="panel metric-panel">
+            <div class="panel-title">模型倾向</div>
+            <div id="recommendation-summary"></div>
+          </div>
+          <div class="panel metric-panel">
+            <div class="panel-title">胜平负</div>
+            <div id="winner-bars"></div>
+          </div>
+          <div class="panel metric-panel">
+            <div class="panel-title">数据质量</div>
+            <div id="data-quality"></div>
+          </div>
+        </section>
+
+        <section class="analysis-grid">
+          <div class="panel wide">
+            <div class="panel-title">比分热力图</div>
+            <div id="score-heatmap"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">最可能比分</div>
+            <div id="top-scores"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">总进球分布</div>
+            <div id="goals-bars"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">大小球</div>
+            <div id="over-under-bars"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">半场胜平负</div>
+            <div id="half-time-bars"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="parlay-header">
+            <div class="panel-title">串关推荐</div>
+            <div class="segmented">
+              <button data-strategy="conservative">稳健</button>
+              <button data-strategy="balanced" class="active">平衡</button>
+              <button data-strategy="return_seeking">收益</button>
+            </div>
+          </div>
+          <div id="parlay-scatter"></div>
+          <div id="parlay-results" class="parlay-results"></div>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>
