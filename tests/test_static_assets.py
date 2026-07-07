@@ -35,6 +35,12 @@ def test_frontend_escapes_dynamic_html_and_attributes():
     assert "function escapeAttribute" in app_js
     assert "function escapeHtml" in charts_js
     assert "function escapeAttribute" in charts_js
+    assert 'data-match-id="${escapeAttribute(match.match_id)}"' in app_js
+    assert "${escapeHtml(match.home.name)} vs ${escapeHtml(match.away.name)}" in app_js
+    assert "${escapeHtml(parlay.explanation)}" in app_js
+    assert "${escapeHtml(leg.label)}" in app_js
+    assert "${escapeHtml(row.label)}" in charts_js
+    assert "escapeAttribute(`${label} ${pct(item.probability)}`)" in charts_js
 
 
 def test_heatmap_handles_zero_probability_and_mobile_overflow():
@@ -42,5 +48,7 @@ def test_heatmap_handles_zero_probability_and_mobile_overflow():
     css = (STATIC / "styles.css").read_text()
 
     assert "maxProbability <= 0" in charts_js
+    assert 'node.innerHTML = "<p>暂无有效比分分布。</p>";' in charts_js
+    assert "NaN" not in charts_js
     assert "#score-heatmap" in css
     assert "overflow-x: auto" in css
