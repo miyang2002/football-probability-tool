@@ -44,7 +44,12 @@ def build_parlays(
         and pick.edge > 0
         and pick.model_probability >= 0.45
     ]
-    ordered = sorted(eligible, key=lambda item: score_pick(item, strategy), reverse=True)
+    ordered_by_score = sorted(eligible, key=lambda item: score_pick(item, strategy), reverse=True)
+    best_by_match: dict[str, PickRecommendation] = {}
+    for pick in ordered_by_score:
+        if pick.match_id not in best_by_match:
+            best_by_match[pick.match_id] = pick
+    ordered = list(best_by_match.values())
 
     results: list[ParlayRecommendation] = []
     for leg_count in range(2, min(max_legs, len(ordered)) + 1):

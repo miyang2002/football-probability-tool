@@ -46,3 +46,16 @@ def test_optimizer_uses_strategy_to_change_ordering():
 
     assert conservative.legs[0].match_id == "safe"
     assert any(leg.match_id == "value" for leg in return_seeking.legs)
+
+
+def test_optimizer_keeps_only_one_pick_per_match():
+    picks = [
+        pick("same", 0.72, 1.7, 0.12, "low"),
+        pick("same", 0.68, 1.9, 0.11, "low"),
+        pick("other", 0.58, 2.0, 0.08, "medium"),
+    ]
+
+    parlay = build_parlays(picks, strategy="balanced", max_legs=2)[0]
+
+    assert [leg.match_id for leg in parlay.legs].count("same") == 1
+    assert {leg.match_id for leg in parlay.legs} == {"same", "other"}
