@@ -1,5 +1,6 @@
 from app.data.providers import SampleDataProvider
 from app.data.repository import PredictionRepository
+from app.data import sample_data
 from app.domain import MarketProbability
 
 
@@ -24,6 +25,22 @@ def test_sample_provider_returns_deep_copies():
     assert refetched is not None
     assert "mutated" not in refetched.context.notes
     assert refetched.odds
+
+
+def test_sample_data_module_does_not_export_mutable_match_list():
+    assert not hasattr(sample_data, "SAMPLE_MATCHES")
+
+
+def test_sample_provider_rebuilds_matches_from_raw_fixtures():
+    provider = SampleDataProvider()
+    first = provider.get_match("wc-001")
+    assert first is not None
+
+    first.context.notes.append("local mutation")
+    second = provider.get_match("wc-001")
+
+    assert second is not None
+    assert "local mutation" not in second.context.notes
 
 
 def test_repository_saves_prediction_snapshot(tmp_path):
