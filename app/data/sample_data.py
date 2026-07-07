@@ -65,7 +65,7 @@ _SAMPLE_MATCH_FIXTURES: tuple[dict[str, Any], ...] = (
             "notes": ["Argentina rate slightly higher on form and chance creation."],
         },
         "odds": [
-            {"market": "winner", "selection": "home", "decimal_odds": 2.05},
+            {"market": "winner", "selection": "home", "decimal_odds": 2.15},
             {"market": "winner", "selection": "draw", "decimal_odds": 3.25},
             {"market": "winner", "selection": "away", "decimal_odds": 3.75},
         ],
@@ -98,7 +98,7 @@ _SAMPLE_MATCH_FIXTURES: tuple[dict[str, Any], ...] = (
             "notes": ["Spain project as a narrow favorite with lower defensive risk."],
         },
         "odds": [
-            {"market": "winner", "selection": "home", "decimal_odds": 2.12},
+            {"market": "winner", "selection": "home", "decimal_odds": 2.25},
             {"market": "winner", "selection": "draw", "decimal_odds": 3.10},
             {"market": "winner", "selection": "away", "decimal_odds": 3.65},
         ],
