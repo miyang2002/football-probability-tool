@@ -34,6 +34,27 @@ FOOTBALL_DATA_PROVIDER=sporttery SPORTTERY_REFRESH_SECONDS=30 uvicorn app.main:a
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q
 ```
 
+## Deploy On Render
+
+This repository includes `render.yaml` for a public Render web service.
+
+1. Push this repository to GitHub.
+2. In Render, choose **New +** then **Blueprint**.
+3. Connect the GitHub repository.
+4. Let Render read `render.yaml`.
+5. Create the service and wait for the deploy to finish.
+6. Open the generated Render URL.
+
+The Render service uses:
+
+- Build command: `pip install -r requirements.txt`
+- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- Health check: `/api/health`
+- Data source: `FOOTBALL_DATA_PROVIDER=sporttery`
+- Odds refresh: `SPORTTERY_REFRESH_SECONDS=30`
+
+No access password is configured. Anyone with the Render URL can open the site.
+
 ## Data Sources
 
 The default provider is deterministic sample data for offline development and repeatable tests.
@@ -41,6 +62,8 @@ The default provider is deterministic sample data for offline development and re
 Set `FOOTBALL_DATA_PROVIDER=sporttery` to fetch live football fixtures and HAD win/draw/loss odds from the public China Sports Lottery calculator JSON endpoint. The provider sends browser-like headers, parses upcoming matches only, caches data in memory, and refreshes when the cache is older than `SPORTTERY_REFRESH_SECONDS`.
 
 If the live source is blocked or unavailable, the app keeps using the last successful live cache. If no live cache exists, it falls back to sample data and shows the feed warning in the top bar.
+
+Some cloud IP ranges can be blocked by the China Sports Lottery WAF. If that happens on Render, the top bar will show the feed warning and the app will continue with cached or sample data.
 
 ## Risk Note
 
