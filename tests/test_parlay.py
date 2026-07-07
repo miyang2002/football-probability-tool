@@ -85,7 +85,7 @@ def test_fewer_unique_matches_than_requested_returns_available_leg_counts():
     assert [item.leg_count for item in parlays] == [2, 3]
 
 
-@pytest.mark.parametrize("strategy", ["", "aggressive", None])
+@pytest.mark.parametrize("strategy", ["", "aggressive", None, []])
 def test_invalid_strategy_raises_even_without_eligible_picks(strategy):
     with pytest.raises(ValueError):
         build_parlays([], strategy=strategy, max_legs=4)

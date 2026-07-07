@@ -37,7 +37,7 @@ def build_parlays(
     strategy: StrategyName = "balanced",
     max_legs: int = 4,
 ) -> list[ParlayRecommendation]:
-    if strategy not in VALID_STRATEGIES:
+    if not isinstance(strategy, str) or strategy not in VALID_STRATEGIES:
         raise ValueError("strategy must be conservative, balanced, or return_seeking")
     if not isinstance(max_legs, int) or isinstance(max_legs, bool) or not 2 <= max_legs <= 6:
         raise ValueError("max_legs must be an integer between 2 and 6")
