@@ -16,6 +16,32 @@ Local personal-use football probability analysis website.
 
 ## Run
 
+One-click local launch:
+
+Windows:
+
+```text
+Double-click start_local.bat
+```
+
+macOS:
+
+```bash
+chmod +x start_local.command
+./start_local.command
+```
+
+Linux:
+
+```bash
+chmod +x start_local.sh
+./start_local.sh
+```
+
+The launcher creates `.venv`, installs dependencies, starts the local FastAPI server, uses `FOOTBALL_DATA_PROVIDER=sporttery`, and opens the browser automatically.
+
+Manual local launch:
+
 ```bash
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
