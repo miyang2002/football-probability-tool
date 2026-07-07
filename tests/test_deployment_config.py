@@ -9,6 +9,8 @@ def test_render_blueprint_deploys_fastapi_with_live_sporttery_source():
 
     assert "type: web" in render_yaml
     assert "runtime: python" in render_yaml
+    assert "plan: free" in render_yaml
+    assert "plan: starter" not in render_yaml
     assert "pip install -r requirements.txt" in render_yaml
     assert "uvicorn app.main:app --host 0.0.0.0 --port $PORT" in render_yaml
     assert "healthCheckPath: /api/health" in render_yaml

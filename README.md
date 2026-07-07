@@ -47,6 +47,7 @@ This repository includes `render.yaml` for a public Render web service.
 
 The Render service uses:
 
+- Instance plan: `free`
 - Build command: `pip install -r requirements.txt`
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - Health check: `/api/health`
@@ -54,6 +55,8 @@ The Render service uses:
 - Odds refresh: `SPORTTERY_REFRESH_SECONDS=30`
 
 No access password is configured. Anyone with the Render URL can open the site.
+
+The free Render instance can sleep when idle. The first request after sleep may take longer, and odds refresh resumes after the service wakes up.
 
 ## Data Sources
 
