@@ -1,4 +1,4 @@
-from math import exp, factorial, isfinite
+from math import exp, isfinite, lgamma, log
 
 from app.domain import MarketProbability, MatchInput, ScoreProbability
 
@@ -30,7 +30,11 @@ def estimate_expected_goals(match: MatchInput) -> tuple[float, float]:
 
 
 def poisson_probability(goals: int, expected_goals: float) -> float:
-    return (expected_goals**goals * exp(-expected_goals)) / factorial(goals)
+    if goals < 0:
+        raise ValueError("goals must be non-negative")
+    if expected_goals == 0:
+        return 1.0 if goals == 0 else 0.0
+    return exp((goals * log(expected_goals)) - expected_goals - lgamma(goals + 1))
 
 
 def poisson_score_matrix(home_xg: float, away_xg: float, max_goals: int = 8) -> list[ScoreProbability]:

@@ -60,6 +60,11 @@ def test_score_matrix_rejects_invalid_inputs(home_xg, away_xg, max_goals):
         poisson_score_matrix(home_xg, away_xg, max_goals=max_goals)
 
 
+def test_score_matrix_rejects_extreme_expected_goals_with_controlled_error():
+    with pytest.raises(ValueError):
+        poisson_score_matrix(1e100, 1.0, max_goals=8)
+
+
 def test_aggregates_include_winner_and_totals():
     matrix = poisson_score_matrix(1.45, 1.1, max_goals=8)
     markets = aggregate_score_matrix(matrix)
