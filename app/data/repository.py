@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from fastapi.encoders import jsonable_encoder
+
 
 class PredictionRepository:
     def __init__(self, db_path: str = "data/predictions.sqlite3") -> None:
@@ -31,10 +33,11 @@ class PredictionRepository:
 
     def save_snapshot(self, match_id: str, payload: dict[str, Any]) -> int:
         created_at = datetime.now(timezone.utc).isoformat()
+        serialized_payload = json.dumps(jsonable_encoder(payload))
         with self._connect() as connection:
             cursor = connection.execute(
                 "INSERT INTO prediction_snapshots (match_id, created_at, payload) VALUES (?, ?, ?)",
-                (match_id, created_at, json.dumps(payload)),
+                (match_id, created_at, serialized_payload),
             )
             return int(cursor.lastrowid)
 
