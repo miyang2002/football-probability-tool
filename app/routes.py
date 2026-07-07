@@ -13,8 +13,12 @@ provider = SampleDataProvider()
 
 
 @lru_cache(maxsize=1)
-async def get_repository() -> PredictionRepository:
+def _get_repository() -> PredictionRepository:
     return PredictionRepository()
+
+
+async def get_repository() -> PredictionRepository:
+    return _get_repository()
 
 
 @router.get("/api/matches")

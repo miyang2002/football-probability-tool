@@ -69,3 +69,10 @@ def test_snapshot_endpoints_return_404_for_unknown_match(tmp_path):
 
     assert save_response.status_code == 404
     assert list_response.status_code == 404
+
+
+def test_repository_dependency_can_be_awaited_repeatedly():
+    first = asyncio.run(get_repository())
+    second = asyncio.run(get_repository())
+
+    assert first is second
