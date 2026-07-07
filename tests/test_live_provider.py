@@ -167,7 +167,7 @@ def test_sporttery_provider_uses_cached_live_data_when_refresh_fails():
     assert [match.match_id for match in second] == ["sporttery-2040427"]
     assert provider.status().healthy is False
     assert provider.status().using_fallback is False
-    assert "cached" in provider.status().message
+    assert "上次成功数据" in provider.status().message
 
 
 def test_sporttery_provider_falls_back_to_sample_when_first_refresh_fails():

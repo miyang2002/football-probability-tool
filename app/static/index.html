@@ -10,7 +10,7 @@
     <header class="topbar">
       <div>
         <h1>足球概率分析</h1>
-        <p>胜平负、比分、进球数、半场和串关策略</p>
+        <p>胜平负、比分、进球数、半场和串关分析</p>
       </div>
       <div class="top-actions">
         <div id="feed-status" class="feed-status">数据源加载中</div>
@@ -33,18 +33,23 @@
       </aside>
 
       <section class="content">
+        <section class="panel hero-panel">
+          <div class="panel-title">一句话结论</div>
+          <div id="recommendation-summary"></div>
+        </section>
+
         <section class="summary-grid">
-          <div class="panel metric-panel">
-            <div class="panel-title">模型倾向</div>
-            <div id="recommendation-summary"></div>
-          </div>
           <div class="panel metric-panel">
             <div class="panel-title">胜平负</div>
             <div id="winner-bars"></div>
           </div>
           <div class="panel metric-panel">
-            <div class="panel-title">数据质量</div>
+            <div class="panel-title">数据可信度</div>
             <div id="data-quality"></div>
+          </div>
+          <div class="panel metric-panel">
+            <div class="panel-title">比分依据</div>
+            <div id="score-basis"></div>
           </div>
         </section>
 
@@ -73,11 +78,11 @@
 
         <section class="panel">
           <div class="parlay-header">
-            <div class="panel-title">串关推荐</div>
+            <div class="panel-title">串关分析</div>
             <div class="segmented">
               <button data-strategy="conservative">稳健</button>
-              <button data-strategy="balanced" class="active">平衡</button>
-              <button data-strategy="return_seeking">收益</button>
+              <button data-strategy="balanced" class="active">均衡</button>
+              <button data-strategy="return_seeking">博收益</button>
             </div>
           </div>
           <div id="parlay-scatter"></div>

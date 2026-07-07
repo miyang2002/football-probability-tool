@@ -3,10 +3,16 @@ from operator import mul
 from typing import Iterable
 
 from app.domain import ParlayLeg, ParlayRecommendation, PickRecommendation, RiskLevel, StrategyName
+from app.model.recommendations import market_label, selection_label
 
 
 RISK_SCORE = {"low": 1.0, "medium": 0.6, "high": 0.25}
 VALID_STRATEGIES = {"conservative", "balanced", "return_seeking"}
+STRATEGY_LABELS = {
+    "conservative": "稳健",
+    "balanced": "均衡",
+    "return_seeking": "博收益",
+}
 
 
 def score_pick(pick: PickRecommendation, strategy: StrategyName) -> float:
@@ -30,6 +36,55 @@ def parlay_risk(legs: Iterable[ParlayLeg]) -> RiskLevel:
     if "medium" in risks or len(risks) == 3:
         return "medium"
     return "low"
+
+
+def parlay_value_label(expected_value: float) -> str:
+    if expected_value >= 0.12:
+        return "赔率组合偏划算"
+    if expected_value >= 0:
+        return "赔率组合一般"
+    return "赔率组合回报不够"
+
+
+def probability_label(probability: float) -> str:
+    return f"预计命中 {probability:.1%}，约等于100次里中{round(probability * 100)}次"
+
+
+def leg_display_label(pick: PickRecommendation) -> str:
+    match_label = pick.match_label or pick.match_id
+    return f"{match_label} · {market_label(pick.market)} · {selection_label(pick.selection)}"
+
+
+def build_parlay_reasons(
+    legs: list[ParlayLeg],
+    combined_probability: float,
+    combined_odds: float,
+    expected_value: float,
+    strategy: StrategyName,
+) -> tuple[str | None, str | None, list[str], list[str]]:
+    strongest = max(legs, key=lambda leg: leg.probability, default=None)
+    weakest = min(legs, key=lambda leg: leg.probability, default=None)
+    strongest_label = strongest.label if strongest else None
+    weakest_label = weakest.label if weakest else None
+    expected_profit = expected_value * 100
+    reasons = [
+        f"{STRATEGY_LABELS[strategy]}方案会同时看模型概率、赔率划算度和单关风险。",
+        f"组合总赔率 {combined_odds:.2f}，预计命中 {combined_probability:.1%}。",
+        f"100元长期理论盈亏约 {expected_profit:+.1f} 元。",
+    ]
+    warnings: list[str] = []
+    if strongest:
+        reasons.append(f"最稳一关：{strongest.label}，模型概率 {strongest.probability:.1%}。")
+    if weakest:
+        reasons.append(f"拖后腿一关：{weakest.label}，模型概率 {weakest.probability:.1%}，需要重点复核。")
+    if any(leg.risk == "high" for leg in legs):
+        warnings.append("组合里有风险偏高的单关，不适合重仓。")
+    if len(legs) >= 4:
+        warnings.append("串关场次越多，命中率下降越快。")
+    if expected_value < 0:
+        warnings.append("模型看下来赔率回报不够，建议谨慎或放弃。")
+
+    return strongest_label, weakest_label, reasons, warnings
 
 
 def build_parlays(
@@ -63,13 +118,16 @@ def build_parlays(
         legs = [
             ParlayLeg(
                 match_id=pick.match_id,
-                label=f"{pick.match_id} {pick.market} {pick.selection}",
+                match_label=pick.match_label,
+                label=leg_display_label(pick),
                 market=pick.market,
                 selection=pick.selection,
+                selection_label=selection_label(pick.selection),
                 probability=pick.model_probability,
                 decimal_odds=pick.decimal_odds or 1.0,
                 edge=pick.edge or 0.0,
                 risk=pick.risk,
+                value_label=pick.value_label,
             )
             for pick in selected
         ]
@@ -77,20 +135,36 @@ def build_parlays(
         combined_odds = reduce(mul, (leg.decimal_odds for leg in legs), 1.0)
         ev = combined_probability * combined_odds - 1.0
         risk = parlay_risk(legs)
+        strongest_leg, weakest_leg, reasons, warnings = build_parlay_reasons(
+            legs,
+            combined_probability,
+            combined_odds,
+            ev,
+            strategy,
+        )
         explanation = (
-            f"{leg_count}-leg combination selected by {strategy} scoring. "
-            f"Combined hit probability is {combined_probability:.1%}; expected value is {ev:.1%}."
+            f"{STRATEGY_LABELS[strategy]} {leg_count}串1：预计命中 {combined_probability:.1%}，"
+            f"总赔率 {combined_odds:.2f}，{parlay_value_label(ev)}。"
         )
         results.append(
             ParlayRecommendation(
                 strategy=strategy,
+                strategy_label=STRATEGY_LABELS[strategy],
                 leg_count=leg_count,
                 legs=legs,
                 combined_probability=combined_probability,
                 combined_odds=combined_odds,
                 expected_value=ev,
+                probability_label=probability_label(combined_probability),
+                value_label=parlay_value_label(ev),
+                payout_if_hit_100=combined_odds * 100,
+                expected_profit_100=ev * 100,
+                strongest_leg=strongest_leg,
+                weakest_leg=weakest_leg,
                 risk=risk,
                 explanation=explanation,
+                reasons=reasons,
+                warnings=warnings,
             )
         )
 

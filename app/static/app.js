@@ -14,6 +14,7 @@ const nodes = {
   recommendationSummary: document.querySelector("#recommendation-summary"),
   winnerBars: document.querySelector("#winner-bars"),
   dataQuality: document.querySelector("#data-quality"),
+  scoreBasis: document.querySelector("#score-basis"),
   scoreHeatmap: document.querySelector("#score-heatmap"),
   topScores: document.querySelector("#top-scores"),
   goalsBars: document.querySelector("#goals-bars"),
@@ -50,7 +51,35 @@ function labelSelection(selection) {
     draw: "平局",
     away: "客胜",
   };
-  return labels[selection] || selection.replace("_", " ");
+  if (labels[selection]) return labels[selection];
+  if (selection.startsWith("over_")) return `大于 ${selection.replace("over_", "")} 球`;
+  if (selection.startsWith("under_")) return `小于 ${selection.replace("under_", "")} 球`;
+  if (selection === "5+") return "5球以上";
+  return selection;
+}
+
+function labelRisk(risk) {
+  const labels = {
+    low: "风险较低",
+    medium: "风险中等",
+    high: "风险偏高",
+  };
+  return labels[risk] || risk;
+}
+
+function labelSource(source) {
+  const labels = {
+    sporttery: "体彩实时",
+    sample: "示例数据",
+    auto: "自动数据源",
+    the_odds_api: "备用赔率",
+  };
+  return labels[source] || source;
+}
+
+function signedMoney(value) {
+  const number = Number(value || 0);
+  return `${number >= 0 ? "+" : "-"}${Math.abs(number).toFixed(1)}元`;
 }
 
 function formatKickoff(value) {
@@ -97,10 +126,10 @@ function renderOddsMovement(match) {
 
 function renderFeedStatus(status) {
   const healthClass = status.healthy ? "healthy" : "unhealthy";
-  const fallback = status.using_fallback ? " · fallback" : "";
+  const fallback = status.using_fallback ? " · 备用" : "";
   nodes.feedStatus.innerHTML = `
     <span class="feed-dot ${healthClass}"></span>
-    <span>${escapeHtml(status.source)}${fallback}</span>
+    <span>${escapeHtml(labelSource(status.source))}${fallback}</span>
     <span>${escapeHtml(status.message)}</span>
     ${status.last_success_at ? `<span>${escapeHtml(formatKickoff(status.last_success_at))}</span>` : ""}
   `;
@@ -131,12 +160,29 @@ function renderRecommendation(analysis) {
     nodes.recommendationSummary.innerHTML = "<p>当前模型不建议强行选择。</p>";
     return;
   }
+  const warnings = pick.warnings?.length
+    ? `<div class="warning-list">${pick.warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
+    : "";
+  const reasons = pick.reasons?.length
+    ? `<div class="reason-list">${pick.reasons.slice(0, 3).map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>`
+    : "";
   nodes.recommendationSummary.innerHTML = `
-    <h2>${escapeHtml(labelSelection(pick.selection))}</h2>
-    <p>市场：${escapeHtml(pick.market)}</p>
-    <p>模型概率：${pct(pick.model_probability)}</p>
-    <p>期望值：${pick.expected_value === null ? "无赔率" : pct(pick.expected_value)}</p>
-    <p>风险：${escapeHtml(pick.risk)}</p>
+    <div class="pick-summary">
+      <div>
+        <span class="subtle">首选倾向</span>
+        <h2>${escapeHtml(labelSelection(pick.selection))}</h2>
+      </div>
+      <span class="value-pill">${escapeHtml(pick.value_label || "没有赔率，无法判断")}</span>
+    </div>
+    <div class="quick-stats">
+      <div><span>模型认为</span><strong>${pct(pick.model_probability)}</strong></div>
+      <div><span>当前赔率</span><strong>${pick.decimal_odds ? Number(pick.decimal_odds).toFixed(2) : "无"}</strong></div>
+      <div><span>赔率是否划算</span><strong>${escapeHtml(pick.value_label || "无法判断")}</strong></div>
+      <div><span>风险</span><strong>${escapeHtml(labelRisk(pick.risk))}</strong></div>
+    </div>
+    <p class="plain-summary">${escapeHtml(pick.plain_summary || "模型暂时没有足够信息给出详细解释。")}</p>
+    ${reasons}
+    ${warnings}
   `;
 }
 
@@ -146,19 +192,34 @@ function renderAnalysis(analysis) {
     nodes.winnerBars,
     analysis.winner_probabilities.map((item) => ({ label: labelSelection(item.selection), value: item.probability })),
   );
-  nodes.dataQuality.innerHTML = `<div class="pill">${pct(analysis.data_quality)}</div><p>预期进球 ${analysis.expected_home_goals.toFixed(2)} - ${analysis.expected_away_goals.toFixed(2)}</p>`;
+  nodes.dataQuality.innerHTML = `
+    <div class="pill">${pct(analysis.data_quality)}</div>
+    <p>数据越高，模型越可信；低于60%需要人工复核。</p>
+  `;
+  nodes.scoreBasis.innerHTML = `
+    <p>${escapeHtml(analysis.score_method_summary)}</p>
+    <p>${escapeHtml(analysis.odds_basis_summary)}</p>
+  `;
   renderHeatmap(nodes.scoreHeatmap, analysis.score_probabilities);
   nodes.topScores.innerHTML = `<div class="score-list">${analysis.top_scores
-    .map((item) => `<div><strong>${item.home_goals}-${item.away_goals}</strong> ${pct(item.probability)}</div>`)
+    .map(
+      (item) => `
+        <div class="score-card">
+          <strong>${item.home_goals}-${item.away_goals}</strong>
+          <span>${pct(item.probability)} · ${escapeHtml(item.outcome_label || "")}</span>
+          <small>${escapeHtml(item.explanation || "")}</small>
+        </div>
+      `,
+    )
     .join("")}</div>`;
   renderBars(
     nodes.goalsBars,
-    analysis.total_goal_probabilities.map((item) => ({ label: item.selection, value: item.probability })),
+    analysis.total_goal_probabilities.map((item) => ({ label: labelSelection(item.selection), value: item.probability })),
     "var(--blue)",
   );
   renderBars(
     nodes.overUnderBars,
-    analysis.over_under_probabilities.map((item) => ({ label: item.selection, value: item.probability })),
+    analysis.over_under_probabilities.map((item) => ({ label: labelSelection(item.selection), value: item.probability })),
     "var(--amber)",
   );
   renderBars(
@@ -178,10 +239,39 @@ function renderParlays(parlays) {
     .map(
       (parlay) => `
         <article class="parlay-card">
-          <h3>${parlay.leg_count}串1 · ${escapeHtml(parlay.risk)}</h3>
-          <p>命中率 ${pct(parlay.combined_probability)} · 总赔率 ${parlay.combined_odds.toFixed(2)} · EV ${pct(parlay.expected_value)}</p>
-          <p>${escapeHtml(parlay.explanation)}</p>
-          ${parlay.legs.map((leg) => `<div>${escapeHtml(leg.label)} · ${pct(leg.probability)} · ${leg.decimal_odds.toFixed(2)}</div>`).join("")}
+          <div class="parlay-title">
+            <h3>${parlay.leg_count}串1 · ${escapeHtml(parlay.strategy_label || "")}</h3>
+            <span class="value-pill">${escapeHtml(parlay.value_label || "")}</span>
+          </div>
+          <div class="quick-stats parlay-stats">
+            <div><span>预计命中</span><strong>${pct(parlay.combined_probability)}</strong></div>
+            <div><span>总赔率</span><strong>${parlay.combined_odds.toFixed(2)}</strong></div>
+            <div><span>100元中出返还</span><strong>${Number(parlay.payout_if_hit_100 || 0).toFixed(1)}元</strong></div>
+            <div><span>100元理论盈亏</span><strong>${signedMoney(parlay.expected_profit_100)}</strong></div>
+          </div>
+          <p class="plain-summary">${escapeHtml(parlay.explanation)}</p>
+          <div class="parlay-focus">
+            <div><span>最稳一关</span><strong>${escapeHtml(parlay.strongest_leg || "暂无")}</strong></div>
+            <div><span>拖后腿一关</span><strong>${escapeHtml(parlay.weakest_leg || "暂无")}</strong></div>
+          </div>
+          <div class="reason-list">${(parlay.reasons || []).map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>
+          ${
+            parlay.warnings?.length
+              ? `<div class="warning-list">${parlay.warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
+              : ""
+          }
+          <div class="leg-list">
+            ${parlay.legs
+              .map(
+                (leg) => `
+                  <div class="leg-row">
+                    <strong>${escapeHtml(leg.label)}</strong>
+                    <span>模型 ${pct(leg.probability)} · 赔率 ${leg.decimal_odds.toFixed(2)} · ${escapeHtml(leg.value_label || "")} · ${escapeHtml(labelRisk(leg.risk))}</span>
+                  </div>
+                `,
+              )
+              .join("")}
+          </div>
         </article>
       `,
     )

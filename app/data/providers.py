@@ -50,7 +50,7 @@ class SampleDataProvider:
             healthy=True,
             using_fallback=False,
             refresh_seconds=30,
-            message="Using deterministic sample data.",
+            message="正在使用示例数据。",
         )
 
 
@@ -413,13 +413,13 @@ class SportteryDataProvider:
     def status(self) -> SourceStatus:
         healthy = self._last_error is None
         if healthy and self._last_success_at is not None:
-            message = "Live Sporttery data loaded."
+            message = "体彩实时数据已加载。"
         elif self._cache:
-            message = f"Live refresh failed; using cached data: {self._last_error}"
+            message = f"实时刷新失败，继续使用上次成功数据：{self._last_error}"
         elif self._using_fallback:
-            message = f"Live refresh failed; using sample fallback: {self._last_error}"
+            message = f"实时刷新失败，暂用示例数据：{self._last_error}"
         else:
-            message = "Live data has not been requested yet."
+            message = "还没有请求实时数据。"
 
         return SourceStatus(
             source="sporttery",
@@ -511,11 +511,11 @@ class TheOddsApiProvider:
     def status(self) -> SourceStatus:
         healthy = self._last_error is None and self._last_success_at is not None
         if healthy:
-            message = "Live The Odds API data loaded."
+            message = "备用赔率数据已加载。"
         elif self._last_error:
-            message = f"The Odds API refresh failed: {self._last_error}"
+            message = f"备用赔率刷新失败：{self._last_error}"
         else:
-            message = "The Odds API data has not been requested yet."
+            message = "还没有请求备用赔率数据。"
 
         return SourceStatus(
             source="the_odds_api",
@@ -618,7 +618,7 @@ class AutoDataProvider:
             healthy=False,
             using_fallback=True,
             refresh_seconds=30,
-            message="; ".join(messages) if messages else "No live provider has returned data yet.",
+            message="；".join(messages) if messages else "还没有实时数据源返回比赛。",
         )
 
 

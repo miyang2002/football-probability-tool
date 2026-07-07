@@ -60,6 +60,11 @@ def test_match_analysis_endpoint_returns_visualization_payload():
     assert payload["score_probabilities"]
     assert payload["top_scores"]
     assert payload["recommendations"]
+    assert "泊松分布" in payload["score_method_summary"]
+    assert "胜平负赔率" in payload["odds_basis_summary"]
+    assert payload["top_scores"][0]["outcome_label"] in {"主胜", "平局", "客胜"}
+    assert payload["top_scores"][0]["odds_value_label"]
+    assert "赔率" in payload["top_scores"][0]["explanation"]
 
 
 def test_parlay_endpoint_supports_strategy_parameter():
@@ -67,3 +72,10 @@ def test_parlay_endpoint_supports_strategy_parameter():
 
     assert payload
     assert payload[0]["strategy"] == "balanced"
+    assert payload[0]["strategy_label"] == "均衡"
+    assert payload[0]["probability_label"]
+    assert payload[0]["value_label"]
+    assert payload[0]["expected_profit_100"] is not None
+    assert payload[0]["strongest_leg"]
+    assert payload[0]["weakest_leg"]
+    assert payload[0]["reasons"]

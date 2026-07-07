@@ -51,6 +51,11 @@ class ScoreProbability(BaseModel):
     home_goals: int = Field(ge=0)
     away_goals: int = Field(ge=0)
     probability: float = Field(ge=0, le=1)
+    outcome: str | None = None
+    outcome_label: str | None = None
+    related_odds: float | None = Field(default=None, gt=1)
+    odds_value_label: str | None = None
+    explanation: str | None = None
 
 
 class MarketProbability(BaseModel):
@@ -61,6 +66,7 @@ class MarketProbability(BaseModel):
 
 class PickRecommendation(BaseModel):
     match_id: str
+    match_label: str | None = None
     market: MarketName
     selection: str
     model_probability: float = Field(ge=0, le=1)
@@ -72,12 +78,16 @@ class PickRecommendation(BaseModel):
     risk: RiskLevel
     reasons: list[str]
     warnings: list[str]
+    value_label: str = "没有赔率，无法判断"
+    plain_summary: str = ""
 
 
 class MatchAnalysis(BaseModel):
     match: MatchInput
     expected_home_goals: float = Field(ge=0)
     expected_away_goals: float = Field(ge=0)
+    score_method_summary: str
+    odds_basis_summary: str
     winner_probabilities: list[MarketProbability]
     half_time_probabilities: list[MarketProbability]
     total_goal_probabilities: list[MarketProbability]
@@ -95,24 +105,36 @@ class ParlayRequest(BaseModel):
 
 class ParlayLeg(BaseModel):
     match_id: str
+    match_label: str | None = None
     label: str
     market: MarketName
     selection: str
+    selection_label: str = ""
     probability: float = Field(ge=0, le=1)
     decimal_odds: float = Field(gt=1)
     edge: float = Field(ge=-1, le=1)
     risk: RiskLevel
+    value_label: str = "没有赔率，无法判断"
 
 
 class ParlayRecommendation(BaseModel):
     strategy: StrategyName
+    strategy_label: str = ""
     leg_count: int
     legs: list[ParlayLeg]
     combined_probability: float = Field(ge=0, le=1)
     combined_odds: float = Field(gt=1)
     expected_value: float = Field(ge=-1)
+    probability_label: str = ""
+    value_label: str = "没有赔率，无法判断"
+    payout_if_hit_100: float = Field(default=0.0, ge=0)
+    expected_profit_100: float = 0.0
+    strongest_leg: str | None = None
+    weakest_leg: str | None = None
     risk: RiskLevel
     explanation: str
+    reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class SourceStatus(BaseModel):

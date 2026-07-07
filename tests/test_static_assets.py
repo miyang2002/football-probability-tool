@@ -71,3 +71,16 @@ def test_frontend_auto_refreshes_feed_and_displays_odds_movement():
     assert "odds-move-down" in app_js
     assert ".odds-move-up" in css
     assert ".odds-move-down" in css
+
+
+def test_frontend_uses_plain_chinese_analysis_copy():
+    html = (STATIC / "index.html").read_text()
+    app_js = (STATIC / "app.js").read_text()
+
+    assert "一句话结论" in html
+    assert "比分依据" in html
+    assert "赔率是否划算" in app_js
+    assert "最稳一关" in app_js
+    assert "100元理论盈亏" in app_js
+    assert "期望值" not in app_js
+    assert ">EV<" not in app_js

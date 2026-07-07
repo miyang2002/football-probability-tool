@@ -20,6 +20,10 @@ def test_recommendation_calculates_edge_and_expected_value():
     assert picks[0].expected_value is not None
     assert picks[0].expected_value > 0
     assert picks[0].risk in {"low", "medium", "high"}
+    assert picks[0].value_label in {"赔率偏划算", "赔率基本合理", "赔率偏低，回报不够"}
+    assert "模型认为" in picks[0].plain_summary
+    assert "EV" not in picks[0].plain_summary
+    assert any("赔率反推概率" in reason for reason in picks[0].reasons)
 
 
 def test_low_data_quality_adds_warning():
@@ -28,7 +32,7 @@ def test_low_data_quality_adds_warning():
 
     picks = build_recommendations("m1", markets, odds, MatchContext(data_quality=0.45))
 
-    assert any("Data quality" in warning for warning in picks[0].warnings)
+    assert any("数据质量偏低" in warning for warning in picks[0].warnings)
 
 
 def test_high_tactical_uncertainty_adds_warning():
@@ -43,7 +47,7 @@ def test_high_tactical_uncertainty_adds_warning():
     )
 
     assert picks[0].risk == "high"
-    assert any("Tactical uncertainty" in warning for warning in picks[0].warnings)
+    assert any("战术信息不确定" in warning for warning in picks[0].warnings)
 
 
 def test_missing_odds_keeps_pick_without_price_metrics():
@@ -55,7 +59,8 @@ def test_missing_odds_keeps_pick_without_price_metrics():
     assert picks[0].implied_probability is None
     assert picks[0].edge is None
     assert picks[0].expected_value is None
-    assert any("No odds available" in warning for warning in picks[0].warnings)
+    assert picks[0].value_label == "没有赔率，无法判断"
+    assert any("没有对应赔率" in warning for warning in picks[0].warnings)
 
 
 def test_negative_edge_and_expected_value_are_allowed():
