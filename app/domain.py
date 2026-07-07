@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 MarketName = Literal["winner", "total_goals", "over_under", "half_time", "score"]
 StrategyName = Literal["conservative", "balanced", "return_seeking"]
 RiskLevel = Literal["low", "medium", "high"]
+OddsMovement = Literal["up", "down", "flat"]
 
 
 class TeamInput(BaseModel):
@@ -29,6 +30,10 @@ class OddsQuote(BaseModel):
     market: MarketName
     selection: str
     decimal_odds: float = Field(gt=1)
+    source: str | None = None
+    updated_at: str | None = None
+    previous_decimal_odds: float | None = Field(default=None, gt=1)
+    movement: OddsMovement | None = None
 
 
 class MatchInput(BaseModel):
@@ -108,3 +113,13 @@ class ParlayRecommendation(BaseModel):
     expected_value: float = Field(ge=-1)
     risk: RiskLevel
     explanation: str
+
+
+class SourceStatus(BaseModel):
+    source: str
+    healthy: bool
+    using_fallback: bool
+    last_attempt_at: str | None = None
+    last_success_at: str | None = None
+    refresh_seconds: int = Field(gt=0)
+    message: str

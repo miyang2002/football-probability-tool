@@ -11,6 +11,7 @@ from app.domain import (
     ParlayRecommendation,
     PickRecommendation,
     ScoreProbability,
+    SourceStatus,
     TeamInput,
 )
 
@@ -371,3 +372,37 @@ def test_parlay_recommendation_allows_negative_expected_value():
     )
 
     assert recommendation.expected_value == -0.2
+
+
+def test_odds_quote_accepts_live_source_metadata():
+    quote = OddsQuote(
+        market="winner",
+        selection="home",
+        decimal_odds=1.72,
+        source="sporttery",
+        updated_at="2026-07-07T12:07:51Z",
+        previous_decimal_odds=1.69,
+        movement="up",
+    )
+
+    assert quote.source == "sporttery"
+    assert quote.previous_decimal_odds == 1.69
+    assert quote.movement == "up"
+
+
+def test_source_status_serializes_refresh_state():
+    status = SourceStatus(
+        source="sporttery",
+        healthy=True,
+        using_fallback=False,
+        last_attempt_at="2026-07-07T12:08:01Z",
+        last_success_at="2026-07-07T12:08:00Z",
+        refresh_seconds=30,
+        message="Live odds loaded",
+    )
+
+    payload = status.model_dump()
+
+    assert payload["source"] == "sporttery"
+    assert payload["healthy"] is True
+    assert payload["refresh_seconds"] == 30
