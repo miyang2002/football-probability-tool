@@ -37,8 +37,7 @@ def collect_best_picks(matches: list[MatchInput]) -> list[PickRecommendation]:
     picks: list[PickRecommendation] = []
     for match in matches:
         analysis = analyze_match(match)
-        if analysis.recommendations:
-            picks.append(analysis.recommendations[0])
+        picks.extend(analysis.recommendations)
     return picks
 
 
