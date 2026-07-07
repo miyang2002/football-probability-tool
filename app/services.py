@@ -43,3 +43,7 @@ def collect_best_picks(matches: list[MatchInput]) -> list[PickRecommendation]:
 
 def build_parlay_recommendations(matches: list[MatchInput], strategy: StrategyName):
     return build_parlays(collect_best_picks(matches), strategy=strategy, max_legs=4)
+
+
+def analysis_payload(match: MatchInput) -> dict:
+    return analyze_match(match).model_dump()
