@@ -8,6 +8,10 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: FOOTBALL_DATA_PROVIDER
-        value: sporttery
+        value: auto
       - key: SPORTTERY_REFRESH_SECONDS
         value: "30"
+      - key: THE_ODDS_API_KEY
+        sync: false
+      - key: THE_ODDS_REFRESH_SECONDS
+        value: "300"

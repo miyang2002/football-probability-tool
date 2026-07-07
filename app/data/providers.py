@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
@@ -14,9 +15,11 @@ SPORTTERY_ENDPOINT = (
     "?channel=c&poolCode=had,hhad"
 )
 SPORTTERY_REFERER = "https://www.sporttery.cn/jc/jsq/zqspf/"
+ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4/sports"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 MatchWindow = str
 FetchJson = Callable[[], dict[str, Any]]
+FetchJsonList = Callable[[], list[dict[str, Any]]]
 Now = Callable[[], datetime]
 
 
@@ -61,6 +64,12 @@ def to_utc_iso(value: datetime) -> str:
 
 def parse_utc_iso(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
+def normalize_utc_iso(value: str | None) -> str | None:
+    if not value:
+        return None
+    return to_utc_iso(parse_utc_iso(value))
 
 
 def parse_local_datetime(date_value: str | None, time_value: str | None) -> datetime | None:
@@ -145,6 +154,72 @@ def build_winner_odds(
     return quotes
 
 
+def find_h2h_market(bookmaker: dict[str, Any]) -> dict[str, Any] | None:
+    for market in bookmaker.get("markets") or []:
+        if market.get("key") == "h2h":
+            return market
+    return None
+
+
+def select_odds_api_bookmaker(event: dict[str, Any], preferred_bookmaker: str | None = None) -> dict[str, Any] | None:
+    bookmakers = event.get("bookmakers") or []
+    if preferred_bookmaker:
+        preferred = preferred_bookmaker.lower()
+        for bookmaker in bookmakers:
+            if str(bookmaker.get("key", "")).lower() == preferred or str(bookmaker.get("title", "")).lower() == preferred:
+                if find_h2h_market(bookmaker):
+                    return bookmaker
+    for bookmaker in bookmakers:
+        if find_h2h_market(bookmaker):
+            return bookmaker
+    return None
+
+
+def odds_api_selection(outcome_name: str, home_team: str, away_team: str) -> str | None:
+    normalized = outcome_name.strip().lower()
+    if normalized == home_team.strip().lower():
+        return "home"
+    if normalized == away_team.strip().lower():
+        return "away"
+    if normalized in {"draw", "tie"}:
+        return "draw"
+    return None
+
+
+def build_odds_api_winner_odds(
+    match_id: str,
+    event: dict[str, Any],
+    bookmaker: dict[str, Any],
+    previous_odds: dict[tuple[str, str, str], float],
+) -> list[OddsQuote]:
+    market = find_h2h_market(bookmaker)
+    if not market:
+        return []
+
+    updated_at = normalize_utc_iso(bookmaker.get("last_update"))
+    source = f"the_odds_api:{bookmaker.get('key') or bookmaker.get('title') or 'bookmaker'}"
+    quotes: list[OddsQuote] = []
+    for outcome in market.get("outcomes") or []:
+        selection = odds_api_selection(str(outcome.get("name") or ""), str(event.get("home_team") or ""), str(event.get("away_team") or ""))
+        decimal_odds = parse_decimal(outcome.get("price"))
+        if selection is None or decimal_odds is None:
+            continue
+        previous = previous_odds.get((match_id, "winner", selection))
+        quotes.append(
+            OddsQuote(
+                market="winner",
+                selection=selection,
+                decimal_odds=decimal_odds,
+                source=source,
+                updated_at=updated_at,
+                previous_decimal_odds=previous,
+                movement=movement_from_previous(decimal_odds, previous, "flat"),
+            )
+        )
+
+    return sorted(quotes, key=lambda quote: {"home": 0, "draw": 1, "away": 2}.get(quote.selection, 99))
+
+
 def extract_sub_matches(payload: dict[str, Any]) -> list[dict[str, Any]]:
     value = payload.get("value") or {}
     match_groups = value.get("matchInfoList") or []
@@ -206,6 +281,59 @@ def parse_sporttery_payload(
                     tactical_uncertainty=0.25,
                     data_quality=0.78 if odds else 0.58,
                     notes=notes,
+                ),
+                odds=odds,
+            )
+        )
+
+    return sorted(matches, key=lambda match: parse_utc_iso(match.kickoff_utc))
+
+
+def parse_odds_api_payload(
+    payload: list[dict[str, Any]],
+    previous_odds: dict[tuple[str, str, str], float] | None = None,
+    preferred_bookmaker: str | None = None,
+) -> list[MatchInput]:
+    previous = previous_odds or {}
+    matches: list[MatchInput] = []
+
+    for event in payload:
+        kickoff_utc = normalize_utc_iso(event.get("commence_time"))
+        if kickoff_utc is None:
+            continue
+        bookmaker = select_odds_api_bookmaker(event, preferred_bookmaker)
+        if not bookmaker:
+            continue
+
+        match_id = f"oddsapi-{event.get('id')}"
+        odds = build_odds_api_winner_odds(match_id, event, bookmaker, previous)
+        home_odds = next((quote.decimal_odds for quote in odds if quote.selection == "home"), None)
+        away_odds = next((quote.decimal_odds for quote in odds if quote.selection == "away"), None)
+        home_attack, home_defense = team_rating_from_odds(home_odds, away_odds)
+        away_attack, away_defense = team_rating_from_odds(away_odds, home_odds)
+        source_label = bookmaker.get("title") or bookmaker.get("key") or "bookmaker"
+
+        matches.append(
+            MatchInput(
+                match_id=match_id,
+                competition=str(event.get("sport_title") or "Football"),
+                kickoff_utc=kickoff_utc,
+                home=TeamInput(
+                    name=str(event.get("home_team") or "Home"),
+                    attack_rating=home_attack,
+                    defense_rating=home_defense,
+                ),
+                away=TeamInput(
+                    name=str(event.get("away_team") or "Away"),
+                    attack_rating=away_attack,
+                    defense_rating=away_defense,
+                ),
+                neutral_venue=True,
+                context=MatchContext(
+                    lineup_uncertainty=0.3,
+                    tactical_uncertainty=0.28,
+                    data_quality=0.75 if odds else 0.55,
+                    notes=[f"来源：The Odds API / {source_label}。"],
                 ),
                 odds=odds,
             )
@@ -343,9 +471,170 @@ class SportteryDataProvider:
         return json.loads(body)
 
 
+class TheOddsApiProvider:
+    def __init__(
+        self,
+        fetch_json: FetchJsonList | None = None,
+        now: Now = utc_now,
+        refresh_seconds: int = 300,
+        api_key: str | None = None,
+        sport_key: str | None = None,
+        regions: str | None = None,
+        preferred_bookmaker: str | None = None,
+    ) -> None:
+        self._api_key = api_key if api_key is not None else os.getenv("THE_ODDS_API_KEY")
+        self._sport_key = sport_key or os.getenv("THE_ODDS_API_SPORT_KEY", "soccer_fifa_world_cup")
+        self._regions = regions or os.getenv("THE_ODDS_API_REGIONS", "eu,uk,us")
+        self._preferred_bookmaker = preferred_bookmaker or os.getenv("THE_ODDS_API_BOOKMAKER")
+        self._fetch_json = fetch_json or self._fetch_from_endpoint
+        self._now = now
+        self._refresh_seconds = max(refresh_seconds, 60)
+        self._cache: list[MatchInput] = []
+        self._last_attempt_at: datetime | None = None
+        self._last_success_at: datetime | None = None
+        self._last_refresh_at: datetime | None = None
+        self._last_error: str | None = None
+        self._using_fallback = False
+        self._previous_odds: dict[tuple[str, str, str], float] = {}
+
+    def list_matches(self, window: MatchWindow = "next") -> list[MatchInput]:
+        self._refresh_if_needed()
+        return filter_matches_by_window(self._cache, now=self._now(), window=window)
+
+    def get_match(self, match_id: str) -> MatchInput | None:
+        self._refresh_if_needed()
+        for match in self._cache:
+            if match.match_id == match_id:
+                return match
+        return None
+
+    def status(self) -> SourceStatus:
+        healthy = self._last_error is None and self._last_success_at is not None
+        if healthy:
+            message = "Live The Odds API data loaded."
+        elif self._last_error:
+            message = f"The Odds API refresh failed: {self._last_error}"
+        else:
+            message = "The Odds API data has not been requested yet."
+
+        return SourceStatus(
+            source="the_odds_api",
+            healthy=healthy,
+            using_fallback=self._using_fallback,
+            last_attempt_at=to_utc_iso(self._last_attempt_at) if self._last_attempt_at else None,
+            last_success_at=to_utc_iso(self._last_success_at) if self._last_success_at else None,
+            refresh_seconds=self._refresh_seconds,
+            message=message,
+        )
+
+    def _refresh_if_needed(self) -> None:
+        now = self._now().astimezone(timezone.utc)
+        if self._last_refresh_at and (now - self._last_refresh_at).total_seconds() < self._refresh_seconds:
+            return
+
+        self._last_attempt_at = now
+        try:
+            if not self._api_key:
+                raise RuntimeError("THE_ODDS_API_KEY is not configured")
+            payload = self._fetch_json()
+            matches = parse_odds_api_payload(
+                payload,
+                previous_odds=self._previous_odds,
+                preferred_bookmaker=self._preferred_bookmaker,
+            )
+            self._cache = matches
+            self._previous_odds = {
+                (match.match_id, quote.market, quote.selection): quote.decimal_odds
+                for match in matches
+                for quote in match.odds
+            }
+            self._last_error = None
+            self._last_success_at = now
+            self._last_refresh_at = now
+            self._using_fallback = False
+        except Exception as exc:  # pragma: no cover - exercised through injected fetchers.
+            self._last_error = str(exc)
+            self._last_refresh_at = now
+            self._using_fallback = True
+
+    def _fetch_from_endpoint(self) -> list[dict[str, Any]]:
+        query = urlencode(
+            {
+                "apiKey": self._api_key,
+                "regions": self._regions,
+                "markets": "h2h",
+                "oddsFormat": "decimal",
+                "dateFormat": "iso",
+            }
+        )
+        url = f"{ODDS_API_BASE_URL}/{quote(self._sport_key, safe='')}/odds?{query}"
+        request = Request(url, headers={"Accept": "application/json"})
+        with urlopen(request, timeout=15) as response:
+            body = response.read().decode("utf-8")
+        payload = json.loads(body)
+        if not isinstance(payload, list):
+            raise ValueError("The Odds API response was not a list")
+        return payload
+
+
+class AutoDataProvider:
+    def __init__(self, live_providers: list[MatchProvider], fallback_provider: MatchProvider | None = None) -> None:
+        self._live_providers = live_providers
+        self._fallback_provider = fallback_provider or SampleDataProvider()
+        self._active_provider: MatchProvider | None = None
+        self._last_statuses: list[SourceStatus] = []
+
+    def list_matches(self, window: MatchWindow = "next") -> list[MatchInput]:
+        self._last_statuses = []
+        for provider in self._live_providers:
+            matches = provider.list_matches(window=window)
+            status = provider.status()
+            self._last_statuses.append(status)
+            if matches and not status.using_fallback:
+                self._active_provider = provider
+                return matches
+
+        self._active_provider = self._fallback_provider
+        return self._fallback_provider.list_matches(window=window)
+
+    def get_match(self, match_id: str) -> MatchInput | None:
+        if self._active_provider:
+            match = self._active_provider.get_match(match_id)
+            if match:
+                return match
+        for provider in self._live_providers:
+            match = provider.get_match(match_id)
+            if match:
+                return match
+        return self._fallback_provider.get_match(match_id)
+
+    def status(self) -> SourceStatus:
+        if self._active_provider and self._active_provider is not self._fallback_provider:
+            return self._active_provider.status()
+
+        messages = [status.message for status in self._last_statuses]
+        return SourceStatus(
+            source="auto",
+            healthy=False,
+            using_fallback=True,
+            refresh_seconds=30,
+            message="; ".join(messages) if messages else "No live provider has returned data yet.",
+        )
+
+
 def build_provider() -> MatchProvider:
     provider = os.getenv("FOOTBALL_DATA_PROVIDER", "sample").lower()
+    if provider == "auto":
+        refresh_seconds = int(os.getenv("SPORTTERY_REFRESH_SECONDS", "30"))
+        odds_refresh_seconds = int(os.getenv("THE_ODDS_REFRESH_SECONDS", "300"))
+        live_providers: list[MatchProvider] = [SportteryDataProvider(refresh_seconds=refresh_seconds)]
+        if os.getenv("THE_ODDS_API_KEY"):
+            live_providers.append(TheOddsApiProvider(refresh_seconds=odds_refresh_seconds))
+        return AutoDataProvider(live_providers=live_providers)
     if provider == "sporttery":
         refresh_seconds = int(os.getenv("SPORTTERY_REFRESH_SECONDS", "30"))
         return SportteryDataProvider(refresh_seconds=refresh_seconds)
+    if provider in {"the_odds_api", "odds_api"}:
+        odds_refresh_seconds = int(os.getenv("THE_ODDS_REFRESH_SECONDS", "300"))
+        return TheOddsApiProvider(refresh_seconds=odds_refresh_seconds)
     return SampleDataProvider()

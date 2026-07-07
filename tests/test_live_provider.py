@@ -2,9 +2,12 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from app.data.providers import (
+    AutoDataProvider,
     SampleDataProvider,
     SportteryDataProvider,
+    TheOddsApiProvider,
     filter_matches_by_window,
+    parse_odds_api_payload,
     parse_sporttery_payload,
 )
 
@@ -67,6 +70,35 @@ def sporttery_payload() -> dict:
             ],
         },
     }
+
+
+def odds_api_payload() -> list[dict]:
+    return [
+        {
+            "id": "event-1",
+            "sport_title": "FIFA World Cup",
+            "commence_time": "2026-07-08T00:00:00Z",
+            "home_team": "Argentina",
+            "away_team": "Egypt",
+            "bookmakers": [
+                {
+                    "key": "bet365",
+                    "title": "Bet365",
+                    "last_update": "2026-07-07T20:01:00Z",
+                    "markets": [
+                        {
+                            "key": "h2h",
+                            "outcomes": [
+                                {"name": "Argentina", "price": 1.22},
+                                {"name": "Draw", "price": 5.00},
+                                {"name": "Egypt", "price": 10.50},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
 
 
 def test_parse_sporttery_payload_builds_matches_and_live_odds_metadata():
@@ -149,3 +181,50 @@ def test_sporttery_provider_falls_back_to_sample_when_first_refresh_fails():
     assert matches
     assert provider.status().healthy is False
     assert provider.status().using_fallback is True
+
+
+def test_parse_odds_api_payload_builds_matches_and_live_odds_metadata():
+    previous = {("oddsapi-event-1", "winner", "home"): 1.20}
+
+    matches = parse_odds_api_payload(odds_api_payload(), previous_odds=previous)
+
+    assert len(matches) == 1
+    match = matches[0]
+    assert match.match_id == "oddsapi-event-1"
+    assert match.competition == "FIFA World Cup"
+    assert match.kickoff_utc == "2026-07-08T00:00:00Z"
+    assert match.home.name == "Argentina"
+    assert match.away.name == "Egypt"
+
+    odds_by_selection = {quote.selection: quote for quote in match.odds}
+    assert odds_by_selection["home"].decimal_odds == 1.22
+    assert odds_by_selection["home"].previous_decimal_odds == 1.20
+    assert odds_by_selection["home"].movement == "up"
+    assert odds_by_selection["draw"].decimal_odds == 5.00
+    assert odds_by_selection["away"].decimal_odds == 10.50
+    assert odds_by_selection["home"].source == "the_odds_api:bet365"
+
+
+def test_the_odds_api_provider_returns_live_matches_from_injected_fetcher():
+    provider = TheOddsApiProvider(fetch_json=odds_api_payload, api_key="test-key")
+
+    matches = provider.list_matches(window="7d")
+
+    assert [match.match_id for match in matches] == ["oddsapi-event-1"]
+    assert provider.status().healthy is True
+    assert provider.status().using_fallback is False
+
+
+def test_auto_provider_uses_odds_api_when_sporttery_is_blocked():
+    def blocked_sporttery():
+        raise RuntimeError("HTTP Error 567: Unknown Status")
+
+    sporttery = SportteryDataProvider(fetch_json=blocked_sporttery, refresh_seconds=1)
+    odds_api = TheOddsApiProvider(fetch_json=odds_api_payload, api_key="test-key", refresh_seconds=1)
+    provider = AutoDataProvider(live_providers=[sporttery, odds_api], fallback_provider=SampleDataProvider())
+
+    matches = provider.list_matches(window="7d")
+
+    assert [match.match_id for match in matches] == ["oddsapi-event-1"]
+    assert provider.status().source == "the_odds_api"
+    assert provider.status().using_fallback is False

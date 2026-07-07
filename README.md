@@ -51,8 +51,10 @@ The Render service uses:
 - Build command: `pip install -r requirements.txt`
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - Health check: `/api/health`
-- Data source: `FOOTBALL_DATA_PROVIDER=sporttery`
-- Odds refresh: `SPORTTERY_REFRESH_SECONDS=30`
+- Data source: `FOOTBALL_DATA_PROVIDER=auto`
+- China Sports Lottery refresh: `SPORTTERY_REFRESH_SECONDS=30`
+- The Odds API refresh: `THE_ODDS_REFRESH_SECONDS=300`
+- Optional secret: `THE_ODDS_API_KEY`
 
 No access password is configured. Anyone with the Render URL can open the site.
 
@@ -62,9 +64,17 @@ The free Render instance can sleep when idle. The first request after sleep may 
 
 The default provider is deterministic sample data for offline development and repeatable tests.
 
-Set `FOOTBALL_DATA_PROVIDER=sporttery` to fetch live football fixtures and HAD win/draw/loss odds from the public China Sports Lottery calculator JSON endpoint. The provider sends browser-like headers, parses upcoming matches only, caches data in memory, and refreshes when the cache is older than `SPORTTERY_REFRESH_SECONDS`.
+Set `FOOTBALL_DATA_PROVIDER=auto` on Render. Auto mode tries China Sports Lottery first, then The Odds API when `THE_ODDS_API_KEY` is configured, and finally sample data if both live sources fail.
 
-If the live source is blocked or unavailable, the app keeps using the last successful live cache. If no live cache exists, it falls back to sample data and shows the feed warning in the top bar.
+China Sports Lottery mode fetches live football fixtures and HAD win/draw/loss odds from the public calculator JSON endpoint. The provider sends browser-like headers, parses upcoming matches only, caches data in memory, and refreshes when the cache is older than `SPORTTERY_REFRESH_SECONDS`.
+
+The Odds API mode fetches deploy-friendly football h2h odds. Add `THE_ODDS_API_KEY` in Render service environment variables. Optional overrides:
+
+- `THE_ODDS_API_SPORT_KEY`, default `soccer_fifa_world_cup`
+- `THE_ODDS_API_REGIONS`, default `eu,uk,us`
+- `THE_ODDS_API_BOOKMAKER`, default first bookmaker returned with h2h odds
+
+If live sources are blocked or unavailable, the app keeps using the last successful live cache when present. If no live cache exists, it falls back to sample data and shows the feed warning in the top bar.
 
 Some cloud IP ranges can be blocked by the China Sports Lottery WAF. If that happens on Render, the top bar will show the feed warning and the app will continue with cached or sample data.
 
