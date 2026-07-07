@@ -37,6 +37,7 @@ def test_frontend_escapes_dynamic_html_and_attributes():
     assert "function escapeAttribute" in charts_js
     assert 'data-match-id="${escapeAttribute(match.match_id)}"' in app_js
     assert "${escapeHtml(match.home.name)} vs ${escapeHtml(match.away.name)}" in app_js
+    assert "${escapeHtml(match.competition)}" in app_js
     assert "${escapeHtml(parlay.explanation)}" in app_js
     assert "${escapeHtml(leg.label)}" in app_js
     assert "${escapeHtml(row.label)}" in charts_js
