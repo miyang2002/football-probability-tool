@@ -1,6 +1,6 @@
-from app.domain import MatchAnalysis, MatchInput, OddsQuote, PickRecommendation, ScoreProbability, StrategyName
+from app.domain import MatchAnalysis, MatchInput, OddsQuote, PickRecommendation, ScoreProbability, SelectedParlayAnalysis, StrategyName
 from app.model.odds import expected_value, implied_probability
-from app.model.parlay import build_parlays
+from app.model.parlay import build_parlays, build_score_parlays, build_selected_winner_parlays
 from app.model.recommendations import build_recommendations, price_value_label
 from app.model.score_model import (
     aggregate_score_matrix,
@@ -117,6 +117,31 @@ def collect_best_picks(matches: list[MatchInput]) -> list[PickRecommendation]:
 
 def build_parlay_recommendations(matches: list[MatchInput], strategy: StrategyName):
     return build_parlays(collect_best_picks(matches), strategy=strategy, max_legs=4)
+
+
+def build_selected_parlay_analysis(
+    matches: list[MatchInput],
+    selected_match_ids: list[str],
+    strategy: StrategyName,
+    stake: float = 2.0,
+) -> SelectedParlayAnalysis:
+    selected_set = set(selected_match_ids)
+    selected_matches = [match for match in matches if match.match_id in selected_set]
+    ordered_matches = sorted(selected_matches, key=lambda match: selected_match_ids.index(match.match_id))
+    analyses = [analyze_match(match) for match in ordered_matches]
+    winner_picks = [
+        pick
+        for analysis in analyses
+        for pick in analysis.recommendations
+        if pick.market == "winner"
+    ]
+
+    return SelectedParlayAnalysis(
+        selected_match_ids=[match.match_id for match in ordered_matches],
+        stake=stake,
+        winner_parlays=build_selected_winner_parlays(winner_picks, strategy=strategy, max_legs=4, stake=stake),
+        score_parlays=build_score_parlays(analyses, strategy=strategy, max_legs=4, stake=stake),
+    )
 
 
 def analysis_payload(match: MatchInput) -> dict:

@@ -81,6 +81,17 @@ def test_frontend_uses_plain_chinese_analysis_copy():
     assert "比分依据" in html
     assert "赔率是否划算" in app_js
     assert "最稳一关" in app_js
-    assert "100元理论盈亏" in app_js
+    assert "2元一注理论盈亏" in app_js
     assert "期望值" not in app_js
     assert ">EV<" not in app_js
+
+
+def test_frontend_supports_selected_match_score_parlays():
+    app_js = (STATIC / "app.js").read_text()
+
+    assert "加入串关" in app_js
+    assert "/api/selected-parlays" in app_js
+    assert "2元一注" in app_js
+    assert "比分串关" in app_js
+    assert "真实胜平负赔率" in app_js
+    assert "模型理论赔率" in app_js

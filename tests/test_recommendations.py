@@ -26,6 +26,29 @@ def test_recommendation_calculates_edge_and_expected_value():
     assert any("赔率反推概率" in reason for reason in picks[0].reasons)
 
 
+def test_low_probability_longshot_does_not_become_primary_pick_from_odds_value_only():
+    markets = [
+        MarketProbability(market="winner", selection="home", probability=0.58),
+        MarketProbability(market="winner", selection="draw", probability=0.254),
+        MarketProbability(market="winner", selection="away", probability=0.166),
+    ]
+    odds = [
+        OddsQuote(market="winner", selection="home", decimal_odds=1.55),
+        OddsQuote(market="winner", selection="draw", decimal_odds=3.80),
+        OddsQuote(market="winner", selection="away", decimal_odds=8.00),
+    ]
+
+    picks = build_recommendations("arg-egypt", markets, odds, MatchContext(data_quality=0.85))
+
+    assert picks[0].selection == "home"
+    assert picks[0].model_probability == 0.58
+    assert picks[0].expected_value is not None
+    assert picks[0].expected_value < 0
+    assert picks[-1].selection == "away"
+    assert picks[-1].expected_value is not None
+    assert picks[-1].expected_value > 0
+
+
 def test_low_data_quality_adds_warning():
     markets = [MarketProbability(market="winner", selection="home", probability=0.54)]
     odds = [OddsQuote(market="winner", selection="home", decimal_odds=2.0)]
@@ -83,7 +106,7 @@ def test_confidence_is_bounded():
     assert picks[0].confidence == 0.95
 
 
-def test_sorting_keeps_negative_expected_value_below_unknown_value():
+def test_sorting_prioritizes_primary_probability_before_odds_value():
     markets = [
         MarketProbability(market="winner", selection="home", probability=0.55),
         MarketProbability(market="winner", selection="draw", probability=0.60),
@@ -96,4 +119,4 @@ def test_sorting_keeps_negative_expected_value_below_unknown_value():
 
     picks = build_recommendations("m1", markets, odds, MatchContext())
 
-    assert [pick.selection for pick in picks] == ["home", "draw", "away"]
+    assert [pick.selection for pick in picks] == ["draw", "home", "away"]

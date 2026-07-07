@@ -129,12 +129,21 @@ class ParlayRecommendation(BaseModel):
     value_label: str = "没有赔率，无法判断"
     payout_if_hit_100: float = Field(default=0.0, ge=0)
     expected_profit_100: float = 0.0
+    payout_if_hit_2: float = Field(default=0.0, ge=0)
+    expected_profit_2: float = 0.0
     strongest_leg: str | None = None
     weakest_leg: str | None = None
     risk: RiskLevel
     explanation: str
     reasons: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+
+
+class SelectedParlayAnalysis(BaseModel):
+    selected_match_ids: list[str]
+    stake: float = Field(default=2.0, gt=0)
+    winner_parlays: list[ParlayRecommendation] = Field(default_factory=list)
+    score_parlays: list[ParlayRecommendation] = Field(default_factory=list)
 
 
 class SourceStatus(BaseModel):

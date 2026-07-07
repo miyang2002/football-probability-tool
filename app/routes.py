@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.data.providers import MatchProvider, build_provider
 from app.data.repository import PredictionRepository
 from app.domain import MatchInput, StrategyName
-from app.services import analysis_payload, analyze_match, build_parlay_recommendations
+from app.services import analysis_payload, analyze_match, build_parlay_recommendations, build_selected_parlay_analysis
 
 
 router = APIRouter()
@@ -54,6 +54,26 @@ async def get_parlays(
     provider: MatchProvider = Depends(get_provider),
 ):
     return build_parlay_recommendations(provider.list_matches(window=window), strategy)
+
+
+@router.get("/api/selected-parlays")
+async def get_selected_parlays(
+    match_ids: list[str] | None = Query(default=None),
+    strategy: StrategyName = Query(default="balanced"),
+    window: str = Query(default="next"),
+    provider: MatchProvider = Depends(get_provider),
+):
+    unique_match_ids = list(dict.fromkeys(match_ids or []))
+    if len(unique_match_ids) < 2:
+        raise HTTPException(status_code=400, detail="Select at least two matches")
+
+    matches = provider.list_matches(window=window)
+    available_ids = {match.match_id for match in matches}
+    missing_ids = [match_id for match_id in unique_match_ids if match_id not in available_ids]
+    if missing_ids:
+        raise HTTPException(status_code=404, detail=f"Selected matches not found: {', '.join(missing_ids)}")
+
+    return build_selected_parlay_analysis(matches, unique_match_ids, strategy)
 
 
 @router.post("/api/analyze")

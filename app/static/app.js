@@ -3,6 +3,7 @@ import { pct, renderBars, renderHeatmap, renderScatter } from "./charts.js";
 const state = {
   matches: [],
   selectedMatchId: null,
+  selectedParlayMatchIds: new Set(),
   strategy: "balanced",
   window: "next",
 };
@@ -143,12 +144,18 @@ function renderMatches() {
   nodes.matchList.innerHTML = state.matches
     .map(
       (match) => `
-        <button class="match-row ${match.match_id === state.selectedMatchId ? "active" : ""}" data-match-id="${escapeAttribute(match.match_id)}">
-          <strong>${escapeHtml(match.home.name)} vs ${escapeHtml(match.away.name)}</strong>
-          <div>${escapeHtml(match.competition)} · ${escapeHtml(formatKickoff(match.kickoff_utc))}</div>
-          <span class="pill">数据质量 ${pct(match.context.data_quality)}</span>
-          ${renderOddsMovement(match)}
-        </button>
+        <div class="match-row ${match.match_id === state.selectedMatchId ? "active" : ""}">
+          <button class="match-main" data-match-id="${escapeAttribute(match.match_id)}">
+            <strong>${escapeHtml(match.home.name)} vs ${escapeHtml(match.away.name)}</strong>
+            <div>${escapeHtml(match.competition)} · ${escapeHtml(formatKickoff(match.kickoff_utc))}</div>
+            <span class="pill">数据质量 ${pct(match.context.data_quality)}</span>
+            ${renderOddsMovement(match)}
+          </button>
+          <label class="parlay-toggle">
+            <input type="checkbox" data-parlay-match-id="${escapeAttribute(match.match_id)}" ${state.selectedParlayMatchIds.has(match.match_id) ? "checked" : ""} />
+            <span>加入串关</span>
+          </label>
+        </div>
       `,
     )
     .join("");
@@ -229,53 +236,70 @@ function renderAnalysis(analysis) {
   );
 }
 
-function renderParlays(parlays) {
-  renderScatter(nodes.parlayScatter, parlays);
+function renderParlayList(parlays, title, emptyText) {
   if (!parlays.length) {
-    nodes.parlayResults.innerHTML = "<p>当前没有满足条件的串关组合。</p>";
+    return `<section class="parlay-section"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(emptyText)}</p></section>`;
+  }
+  return `
+    <section class="parlay-section">
+      <h3>${escapeHtml(title)}</h3>
+      ${parlays
+        .map(
+          (parlay) => `
+            <article class="parlay-card">
+              <div class="parlay-title">
+                <h3>${parlay.leg_count}串1 · ${escapeHtml(parlay.strategy_label || "")}</h3>
+                <span class="value-pill">${escapeHtml(parlay.value_label || "")}</span>
+              </div>
+              <div class="quick-stats parlay-stats">
+                <div><span>预计命中</span><strong>${pct(parlay.combined_probability)}</strong></div>
+                <div><span>总赔率</span><strong>${parlay.combined_odds.toFixed(2)}</strong></div>
+                <div><span>2元一注中出返还</span><strong>${Number(parlay.payout_if_hit_2 || 0).toFixed(1)}元</strong></div>
+                <div><span>2元一注理论盈亏</span><strong>${signedMoney(parlay.expected_profit_2)}</strong></div>
+              </div>
+              <p class="plain-summary">${escapeHtml(parlay.explanation)}</p>
+              <div class="parlay-focus">
+                <div><span>最稳一关</span><strong>${escapeHtml(parlay.strongest_leg || "暂无")}</strong></div>
+                <div><span>拖后腿一关</span><strong>${escapeHtml(parlay.weakest_leg || "暂无")}</strong></div>
+              </div>
+              <div class="reason-list">${(parlay.reasons || []).map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>
+              ${
+                parlay.warnings?.length
+                  ? `<div class="warning-list">${parlay.warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
+                  : ""
+              }
+              <div class="leg-list">
+                ${parlay.legs
+                  .map(
+                    (leg) => `
+                      <div class="leg-row">
+                        <strong>${escapeHtml(leg.label)}</strong>
+                        <span>模型 ${pct(leg.probability)} · 赔率 ${leg.decimal_odds.toFixed(2)} · ${escapeHtml(leg.value_label || "")} · ${escapeHtml(labelRisk(leg.risk))}</span>
+                      </div>
+                    `,
+                  )
+                  .join("")}
+              </div>
+            </article>
+          `,
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function renderParlays(payload) {
+  const winnerParlays = Array.isArray(payload) ? payload : payload.winner_parlays || [];
+  const scoreParlays = Array.isArray(payload) ? [] : payload.score_parlays || [];
+  renderScatter(nodes.parlayScatter, winnerParlays.concat(scoreParlays));
+  if (!Array.isArray(payload) && payload.selected_match_ids?.length < 2) {
+    nodes.parlayResults.innerHTML = "<p>请先勾选至少两场比赛，再生成串关分析。</p>";
     return;
   }
-  nodes.parlayResults.innerHTML = parlays
-    .map(
-      (parlay) => `
-        <article class="parlay-card">
-          <div class="parlay-title">
-            <h3>${parlay.leg_count}串1 · ${escapeHtml(parlay.strategy_label || "")}</h3>
-            <span class="value-pill">${escapeHtml(parlay.value_label || "")}</span>
-          </div>
-          <div class="quick-stats parlay-stats">
-            <div><span>预计命中</span><strong>${pct(parlay.combined_probability)}</strong></div>
-            <div><span>总赔率</span><strong>${parlay.combined_odds.toFixed(2)}</strong></div>
-            <div><span>100元中出返还</span><strong>${Number(parlay.payout_if_hit_100 || 0).toFixed(1)}元</strong></div>
-            <div><span>100元理论盈亏</span><strong>${signedMoney(parlay.expected_profit_100)}</strong></div>
-          </div>
-          <p class="plain-summary">${escapeHtml(parlay.explanation)}</p>
-          <div class="parlay-focus">
-            <div><span>最稳一关</span><strong>${escapeHtml(parlay.strongest_leg || "暂无")}</strong></div>
-            <div><span>拖后腿一关</span><strong>${escapeHtml(parlay.weakest_leg || "暂无")}</strong></div>
-          </div>
-          <div class="reason-list">${(parlay.reasons || []).map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>
-          ${
-            parlay.warnings?.length
-              ? `<div class="warning-list">${parlay.warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
-              : ""
-          }
-          <div class="leg-list">
-            ${parlay.legs
-              .map(
-                (leg) => `
-                  <div class="leg-row">
-                    <strong>${escapeHtml(leg.label)}</strong>
-                    <span>模型 ${pct(leg.probability)} · 赔率 ${leg.decimal_odds.toFixed(2)} · ${escapeHtml(leg.value_label || "")} · ${escapeHtml(labelRisk(leg.risk))}</span>
-                  </div>
-                `,
-              )
-              .join("")}
-          </div>
-        </article>
-      `,
-    )
-    .join("");
+  nodes.parlayResults.innerHTML = [
+    renderParlayList(winnerParlays, "真实胜平负赔率", "所选比赛没有足够的胜平负赔率，暂时不能计算真实赔率串关。"),
+    renderParlayList(scoreParlays, "比分串关", "所选比赛没有足够的比分模型结果。比分串关会使用模型理论赔率。"),
+  ].join("");
 }
 
 async function loadAnalysis(matchId) {
@@ -284,7 +308,17 @@ async function loadAnalysis(matchId) {
 }
 
 async function loadParlays() {
-  const parlays = await fetchJson(`/api/parlays?strategy=${state.strategy}&window=${state.window}`);
+  const selectedIds = [...state.selectedParlayMatchIds].filter((matchId) =>
+    state.matches.some((match) => match.match_id === matchId),
+  );
+  if (selectedIds.length < 2) {
+    nodes.parlayScatter.innerHTML = "";
+    renderParlays({ selected_match_ids: selectedIds, winner_parlays: [], score_parlays: [] });
+    return;
+  }
+  const params = new URLSearchParams({ strategy: state.strategy, window: state.window });
+  selectedIds.forEach((matchId) => params.append("match_ids", matchId));
+  const parlays = await fetchJson(`/api/selected-parlays?${params.toString()}`);
   renderParlays(parlays);
 }
 
@@ -295,6 +329,8 @@ async function loadFeedStatus() {
 
 async function loadMatches() {
   state.matches = await fetchJson(`/api/matches?window=${state.window}`);
+  const visibleIds = new Set(state.matches.map((match) => match.match_id));
+  state.selectedParlayMatchIds = new Set([...state.selectedParlayMatchIds].filter((matchId) => visibleIds.has(matchId)));
   const selectedStillVisible = state.matches.some((match) => match.match_id === state.selectedMatchId);
   state.selectedMatchId = selectedStillVisible ? state.selectedMatchId : state.matches[0]?.match_id;
   renderMatches();
@@ -319,6 +355,18 @@ nodes.matchList.addEventListener("click", async (event) => {
   await loadAnalysis(state.selectedMatchId);
 });
 
+nodes.matchList.addEventListener("change", async (event) => {
+  const checkbox = event.target.closest("[data-parlay-match-id]");
+  if (!checkbox) return;
+  if (checkbox.checked) {
+    state.selectedParlayMatchIds.add(checkbox.dataset.parlayMatchId);
+  } else {
+    state.selectedParlayMatchIds.delete(checkbox.dataset.parlayMatchId);
+  }
+  renderMatches();
+  await loadParlays();
+});
+
 document.querySelectorAll("[data-strategy]").forEach((button) => {
   button.addEventListener("click", async () => {
     document.querySelectorAll("[data-strategy]").forEach((item) => item.classList.remove("active"));
@@ -334,6 +382,7 @@ document.querySelectorAll("[data-window]").forEach((button) => {
     button.classList.add("active");
     state.window = button.dataset.window;
     state.selectedMatchId = null;
+    state.selectedParlayMatchIds.clear();
     await refreshLiveData();
   });
 });

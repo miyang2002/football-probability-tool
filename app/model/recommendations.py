@@ -65,12 +65,18 @@ def confidence_from_probability(probability: float, context: MatchContext) -> fl
     return round(min(0.95, probability * 0.75 + context.data_quality * 0.25), 4)
 
 
+def primary_probability_floor(market: str) -> float:
+    if market == "winner":
+        return 0.30
+    if market == "over_under":
+        return 0.50
+    return 0.0
+
+
 def recommendation_sort_key(pick: PickRecommendation) -> tuple[int, float, float]:
-    if pick.expected_value is None:
-        return (1, pick.model_probability, 0.0)
-    if pick.expected_value >= 0:
-        return (2, pick.expected_value, pick.model_probability)
-    return (0, pick.expected_value, pick.model_probability)
+    primary_candidate = pick.model_probability >= primary_probability_floor(pick.market)
+    value_score = pick.expected_value if pick.expected_value is not None else -1.0
+    return (1 if primary_candidate else 0, pick.model_probability, value_score)
 
 
 def build_recommendations(

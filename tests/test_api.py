@@ -79,3 +79,28 @@ def test_parlay_endpoint_supports_strategy_parameter():
     assert payload[0]["strongest_leg"]
     assert payload[0]["weakest_leg"]
     assert payload[0]["reasons"]
+
+
+def test_selected_parlays_endpoint_returns_winner_and_score_combinations_with_two_yuan_returns():
+    payload = get_json("/api/selected-parlays?match_ids=wc-001&match_ids=wc-002&match_ids=wc-003&strategy=balanced")
+
+    assert payload["selected_match_ids"] == ["wc-001", "wc-002", "wc-003"]
+    assert payload["stake"] == 2
+    assert payload["winner_parlays"]
+    assert payload["score_parlays"]
+
+    winner = payload["winner_parlays"][0]
+    assert winner["leg_count"] == 2
+    assert winner["payout_if_hit_2"] == pytest.approx(winner["combined_odds"] * 2)
+    assert winner["expected_profit_2"] == pytest.approx(winner["expected_value"] * 2)
+    assert {leg["match_id"] for leg in winner["legs"]}.issubset(set(payload["selected_match_ids"]))
+    assert all(leg["market"] == "winner" for leg in winner["legs"])
+    assert any("2元一注" in reason for reason in winner["reasons"])
+
+    score = payload["score_parlays"][0]
+    assert score["leg_count"] == 2
+    assert score["payout_if_hit_2"] == pytest.approx(score["combined_odds"] * 2)
+    assert score["expected_profit_2"] == pytest.approx(score["expected_value"] * 2)
+    assert all(leg["market"] == "score" for leg in score["legs"])
+    assert all("-" in leg["selection"] for leg in score["legs"])
+    assert any("模型理论赔率" in warning for warning in score["warnings"])
