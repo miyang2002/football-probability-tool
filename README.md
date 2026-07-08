@@ -92,7 +92,25 @@ The default provider is deterministic sample data for offline development and re
 
 Set `FOOTBALL_DATA_PROVIDER=auto` on Render. Auto mode tries China Sports Lottery first, then The Odds API when `THE_ODDS_API_KEY` is configured, and finally sample data if both live sources fail.
 
-China Sports Lottery mode fetches live football fixtures and HAD win/draw/loss odds from the public calculator JSON endpoint. The provider sends browser-like headers, parses upcoming matches only, caches data in memory, and refreshes when the cache is older than `SPORTTERY_REFRESH_SECONDS`.
+China Sports Lottery mode fetches live football fixtures and official odds for HAD, HHAD, correct score, total goals, and half-time/full-time markets from the public calculator JSON endpoint. The provider sends browser-like headers, parses upcoming matches only, caches data in memory, and refreshes when the cache is older than `SPORTTERY_REFRESH_SECONDS`.
+
+## Official Odds Diagnostics
+
+For local-first validation, open the app and check **官方赔率完整性**. The diagnostic view requests China Sports Lottery official odds for:
+
+- 胜平负
+- 让球胜平负
+- 比分
+- 总进球
+- 半全场
+
+The diagnostic view does not use third-party odds and does not treat model-theoretical odds as real odds. If an official market is missing, it is shown as missing and must not be used for recommendation or parlay calculations.
+
+API:
+
+```text
+GET /api/official-odds/diagnostics?window=next
+```
 
 The Odds API mode fetches deploy-friendly football h2h odds. Add `THE_ODDS_API_KEY` in Render service environment variables. Optional overrides:
 
