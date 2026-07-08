@@ -21,6 +21,7 @@ const nodes = {
   goalsBars: document.querySelector("#goals-bars"),
   overUnderBars: document.querySelector("#over-under-bars"),
   halfTimeBars: document.querySelector("#half-time-bars"),
+  officialOddsDiagnostics: document.querySelector("#official-odds-diagnostics"),
   parlayScatter: document.querySelector("#parlay-scatter"),
   parlayResults: document.querySelector("#parlay-results"),
 };
@@ -76,6 +77,27 @@ function labelSource(source) {
     the_odds_api: "备用赔率",
   };
   return labels[source] || source;
+}
+
+function labelOfficialMarket(market) {
+  const labels = {
+    winner: "胜平负",
+    handicap_winner: "让球胜平负",
+    score: "比分",
+    total_goals: "总进球",
+    half_full: "半全场",
+  };
+  return labels[market] || market;
+}
+
+function labelOfficialMarketStatus(status) {
+  const labels = {
+    available: "已抓到",
+    missing: "缺失",
+    suspended: "暂停",
+    malformed: "异常",
+  };
+  return labels[status] || status;
 }
 
 function signedMoney(value) {
@@ -302,6 +324,54 @@ function renderParlays(payload) {
   ].join("");
 }
 
+function renderOfficialOddsDiagnostics(payload) {
+  if (!nodes.officialOddsDiagnostics) return;
+  if (!payload.matches?.length) {
+    nodes.officialOddsDiagnostics.innerHTML = '<p class="empty-state">当前窗口没有官方赔率诊断数据。</p>';
+    return;
+  }
+  nodes.officialOddsDiagnostics.innerHTML = `
+    <div class="official-market-table">
+      ${payload.matches
+        .map(
+          (match) => `
+            <details>
+              <summary>
+                <strong>${escapeHtml(match.home_name)} vs ${escapeHtml(match.away_name)}</strong>
+                <span>${escapeHtml(match.competition)} · ${escapeHtml(formatKickoff(match.kickoff_utc))}</span>
+              </summary>
+              <div class="official-market-grid">
+                ${(match.markets || [])
+                  .map(
+                    (market) => `
+                      <div class="official-market-cell ${escapeAttribute(market.status)}">
+                        <strong>${escapeHtml(labelOfficialMarket(market.market))}</strong>
+                        <span>${escapeHtml(labelOfficialMarketStatus(market.status))}</span>
+                        <small>${Number(market.odds_count || 0)} 项官方赔率</small>
+                        ${
+                          market.odds?.length
+                            ? `<div class="official-odds-list">${market.odds
+                                .slice(0, 12)
+                                .map(
+                                  (quote) =>
+                                    `<span>${escapeHtml(quote.selection_label || quote.selection)} ${Number(quote.decimal_odds).toFixed(2)}</span>`,
+                                )
+                                .join("")}</div>`
+                            : `<em>${escapeHtml((market.warnings || []).join("；") || "暂无官方赔率")}</em>`
+                        }
+                      </div>
+                    `,
+                  )
+                  .join("")}
+              </div>
+            </details>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 async function loadAnalysis(matchId) {
   const analysis = await fetchJson(`/api/matches/${matchId}/analysis`);
   renderAnalysis(analysis);
@@ -327,6 +397,16 @@ async function loadFeedStatus() {
   renderFeedStatus(status);
 }
 
+async function loadOfficialOddsDiagnostics() {
+  if (!nodes.officialOddsDiagnostics) return;
+  try {
+    const payload = await fetchJson(`/api/official-odds/diagnostics?window=${state.window}`);
+    renderOfficialOddsDiagnostics(payload);
+  } catch (error) {
+    nodes.officialOddsDiagnostics.innerHTML = `<p class="empty-state">官方赔率诊断加载失败：${escapeHtml(error.message)}</p>`;
+  }
+}
+
 async function loadMatches() {
   state.matches = await fetchJson(`/api/matches?window=${state.window}`);
   const visibleIds = new Set(state.matches.map((match) => match.match_id));
@@ -345,6 +425,7 @@ async function loadMatches() {
 async function refreshLiveData() {
   await loadFeedStatus();
   await loadMatches();
+  await loadOfficialOddsDiagnostics();
 }
 
 nodes.matchList.addEventListener("click", async (event) => {

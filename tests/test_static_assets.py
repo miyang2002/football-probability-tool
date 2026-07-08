@@ -86,6 +86,22 @@ def test_frontend_uses_plain_chinese_analysis_copy():
     assert ">EV<" not in app_js
 
 
+def test_frontend_contains_official_odds_diagnostics_view():
+    html = (STATIC / "index.html").read_text()
+    app_js = (STATIC / "app.js").read_text()
+    css = (STATIC / "styles.css").read_text()
+
+    assert "official-odds-diagnostics" in html
+    assert "/api/official-odds/diagnostics" in app_js
+    assert "官方赔率完整性" in html
+    assert "胜平负" in app_js
+    assert "让球胜平负" in app_js
+    assert "比分" in app_js
+    assert "总进球" in app_js
+    assert "半全场" in app_js
+    assert "official-market-table" in css
+
+
 def test_frontend_supports_selected_match_score_parlays():
     app_js = (STATIC / "app.js").read_text()
 

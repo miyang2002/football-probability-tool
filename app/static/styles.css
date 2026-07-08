@@ -169,6 +169,10 @@ p {
   margin-bottom: 16px;
 }
 
+.content > .panel + .panel {
+  margin-top: 16px;
+}
+
 .analysis-grid .wide {
   grid-column: span 2;
 }
@@ -452,6 +456,81 @@ p {
   margin-bottom: 4px;
 }
 
+.official-market-table {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.official-market-table details {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.official-market-table summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.official-market-table summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.official-market-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.official-market-cell {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfc;
+}
+
+.official-market-cell.available {
+  border-color: rgba(34, 122, 92, 0.35);
+}
+
+.official-market-cell.missing,
+.official-market-cell.malformed {
+  border-color: rgba(181, 68, 68, 0.28);
+  background: #fff7f7;
+}
+
+.official-market-cell span,
+.official-market-cell small,
+.official-market-cell em {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.official-odds-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.official-odds-list span {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #edf3f1;
+  color: var(--green);
+  font-weight: 700;
+}
+
 svg {
   width: 100%;
   height: auto;
@@ -488,5 +567,13 @@ svg {
 
   .analysis-grid .wide {
     grid-column: span 1;
+  }
+
+  .official-market-table summary {
+    flex-direction: column;
+  }
+
+  .official-market-grid {
+    grid-template-columns: 1fr;
   }
 }
