@@ -154,6 +154,10 @@ function renderOptionList(decision) {
   return options.map((option) => escapeHtml(optionLine(option))).join("<br>");
 }
 
+function officialOddsCount(match, market) {
+  return (match?.odds || []).filter((quote) => quote.market === market && quote.source === "sporttery").length;
+}
+
 function adviceReason(decision) {
   if (decision.missing_info?.length) {
     return decision.missing_info.join("；");
@@ -162,7 +166,7 @@ function adviceReason(decision) {
   return `体彩当前最低赔率是 ${label}，按真实赔率给出参考。`;
 }
 
-function renderDecisionComparison(decisions) {
+function renderDecisionComparison(decisions, match) {
   if (!decisions.length) {
     nodes.decisionComparison.innerHTML = "<p>当前没有可用的体彩赔率建议。</p>";
     return;
@@ -172,6 +176,7 @@ function renderDecisionComparison(decisions) {
       <thead>
         <tr>
           <th>玩法</th>
+          <th>赔率数量</th>
           <th>推荐买法候选和概率</th>
           <th>理由</th>
         </tr>
@@ -182,6 +187,7 @@ function renderDecisionComparison(decisions) {
             (decision) => `
               <tr>
                 <td>${escapeHtml(decision.market_label)}</td>
+                <td>${officialOddsCount(match, decision.market)}项</td>
                 <td>${renderOptionList(decision)}</td>
                 <td>${escapeHtml(adviceReason(decision))}</td>
               </tr>
@@ -194,7 +200,7 @@ function renderDecisionComparison(decisions) {
 }
 
 function renderAnalysis(analysis) {
-  renderDecisionComparison(analysis.decision_comparisons || []);
+  renderDecisionComparison(analysis.decision_comparisons || [], analysis.match);
 }
 
 function renderParlayList(parlays, title) {
@@ -210,7 +216,7 @@ function renderParlayList(parlays, title) {
             <th>串法</th>
             <th>推荐组合</th>
             <th>总赔率</th>
-            <th>2元一注返还</th>
+            <th>2元一注返还（总赔率 × 2元）</th>
             <th>理由</th>
           </tr>
         </thead>

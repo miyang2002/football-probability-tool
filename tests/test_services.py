@@ -237,6 +237,13 @@ def test_selected_parlays_use_only_real_official_odds_from_all_markets():
     winner_parlay = next(parlay for parlay in payload.winner_parlays if parlay.legs[0].market == "winner")
     assert winner_parlay.combined_odds == 1.42 * 1.28
     assert winner_parlay.payout_if_hit_2 == winner_parlay.combined_odds * 2
+    for parlay in payload.winner_parlays:
+        leg_odds_product = 1.0
+        for leg in parlay.legs:
+            leg_odds_product *= leg.decimal_odds
+        assert parlay.combined_odds == leg_odds_product
+        assert parlay.payout_if_hit_2 == leg_odds_product * 2
+        assert parlay.payout_if_hit_2 > max(leg.decimal_odds * 2 for leg in parlay.legs)
     assert all(leg.value_label in {"体彩低赔方向", "体彩均衡方向", "体彩高回报方向"} for parlay in payload.winner_parlays for leg in parlay.legs)
     assert all("真实赔率" in parlay.explanation for parlay in payload.winner_parlays)
     assert all("模型" not in parlay.explanation for parlay in payload.winner_parlays)

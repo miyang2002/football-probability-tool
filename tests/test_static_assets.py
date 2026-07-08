@@ -92,10 +92,13 @@ def test_frontend_uses_plain_chinese_analysis_copy():
 
 def test_frontend_renders_minimal_odds_advice_only():
     app_js = (STATIC / "app.js").read_text()
+    html = (STATIC / "index.html").read_text()
 
+    assert "页面版本" in html
     assert "推荐买法" in app_js
     assert "候选" in app_js
     assert "model_suggestions" in app_js
+    assert "赔率数量" in app_js
     assert "2元一注返还" in app_js
     assert "score_candidates" not in app_js
     assert "球队资料模型" not in app_js
@@ -127,6 +130,7 @@ def test_frontend_supports_minimal_real_odds_parlays():
     assert "/api/selected-parlays" in app_js
     assert "2元一注" in app_js
     assert "真实赔率串关" in app_js
+    assert "总赔率 × 2元" in app_js
     assert "比分串关" not in app_js
     assert "模型理论赔率" not in app_js
     assert "probability_label" not in app_js
