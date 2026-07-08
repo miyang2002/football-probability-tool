@@ -71,14 +71,24 @@ def test_analysis_builds_five_plain_market_decisions_with_payouts():
     assert set(decisions) == {"winner", "handicap_winner", "score", "total_goals", "half_full"}
     assert all(decision.advice_label in {"可作串关胆", "可以参考", "谨慎参考", "娱乐参考", "赔率缺失"} for decision in decisions.values())
     assert decisions["winner"].official_model.selection == "home"
+    assert [option.label for option in decisions["winner"].model_suggestions] == ["主胜", "平局", "客胜"]
     assert decisions["winner"].team_model is None
     assert decisions["winner"].combined_model is None
     assert decisions["winner"].model_weights is None
     assert decisions["handicap_winner"].official_model.selection == "away"
+    assert [option.label for option in decisions["handicap_winner"].model_suggestions] == ["让球客胜", "让球主胜", "让球平"]
     assert decisions["score"].official_model.selection == "1-0"
+    assert [option.label for option in decisions["score"].model_suggestions] == ["1-0", "2-0", "2-1"]
     assert len(decisions["score"].score_candidates) == 3
     assert decisions["total_goals"].official_model.selection == "2"
+    assert [option.label for option in decisions["total_goals"].model_suggestions] == ["2球", "3球", "4球"]
     assert decisions["half_full"].official_model.selection == "home_home"
+    assert [option.label for option in decisions["half_full"].model_suggestions] == ["胜胜", "平胜", "平平"]
+    assert all(
+        option.probability is not None
+        for decision in decisions.values()
+        for option in decision.model_suggestions
+    )
     assert decisions["score"].market_favorite.payout_if_hit_2 == 11.6
     assert decisions["score"].best_return.payout_if_hit_2 is not None
     assert "官方胜平负赔率缺失" not in decisions["winner"].missing_info
@@ -179,7 +189,18 @@ def test_selected_parlays_use_only_real_official_odds_from_all_markets():
             OddsQuote(market="winner", selection="home", decimal_odds=1.42, source="sporttery", selection_label="主胜", movement="down"),
             OddsQuote(market="winner", selection="draw", decimal_odds=3.85, source="sporttery", selection_label="平局"),
             OddsQuote(market="winner", selection="away", decimal_odds=6.45, source="sporttery", selection_label="客胜"),
+            OddsQuote(market="handicap_winner", selection="home", decimal_odds=2.20, source="sporttery", selection_label="让球主胜"),
+            OddsQuote(market="handicap_winner", selection="draw", decimal_odds=3.30, source="sporttery", selection_label="让球平"),
+            OddsQuote(market="handicap_winner", selection="away", decimal_odds=2.80, source="sporttery", selection_label="让球客胜"),
             OddsQuote(market="score", selection="1-0", decimal_odds=5.80, source="sporttery", selection_label="1-0"),
+            OddsQuote(market="score", selection="2-0", decimal_odds=6.20, source="sporttery", selection_label="2-0"),
+            OddsQuote(market="score", selection="1-1", decimal_odds=7.00, source="sporttery", selection_label="1-1"),
+            OddsQuote(market="total_goals", selection="2", decimal_odds=3.10, source="sporttery", selection_label="2球"),
+            OddsQuote(market="total_goals", selection="3", decimal_odds=3.60, source="sporttery", selection_label="3球"),
+            OddsQuote(market="total_goals", selection="4", decimal_odds=5.00, source="sporttery", selection_label="4球"),
+            OddsQuote(market="half_full", selection="home_home", decimal_odds=2.30, source="sporttery", selection_label="胜胜"),
+            OddsQuote(market="half_full", selection="draw_home", decimal_odds=4.20, source="sporttery", selection_label="平胜"),
+            OddsQuote(market="half_full", selection="draw_draw", decimal_odds=6.80, source="sporttery", selection_label="平平"),
         ],
     )
     second = MatchInput(
@@ -192,7 +213,18 @@ def test_selected_parlays_use_only_real_official_odds_from_all_markets():
             OddsQuote(market="winner", selection="home", decimal_odds=1.28, source="sporttery", selection_label="主胜", movement="flat"),
             OddsQuote(market="winner", selection="draw", decimal_odds=4.80, source="sporttery", selection_label="平局"),
             OddsQuote(market="winner", selection="away", decimal_odds=9.00, source="sporttery", selection_label="客胜"),
+            OddsQuote(market="handicap_winner", selection="home", decimal_odds=1.95, source="sporttery", selection_label="让球主胜"),
+            OddsQuote(market="handicap_winner", selection="draw", decimal_odds=3.40, source="sporttery", selection_label="让球平"),
+            OddsQuote(market="handicap_winner", selection="away", decimal_odds=3.05, source="sporttery", selection_label="让球客胜"),
+            OddsQuote(market="score", selection="2-0", decimal_odds=5.50, source="sporttery", selection_label="2-0"),
+            OddsQuote(market="score", selection="1-0", decimal_odds=6.10, source="sporttery", selection_label="1-0"),
+            OddsQuote(market="score", selection="2-1", decimal_odds=7.20, source="sporttery", selection_label="2-1"),
             OddsQuote(market="total_goals", selection="2", decimal_odds=3.10, source="sporttery", selection_label="2球"),
+            OddsQuote(market="total_goals", selection="3", decimal_odds=3.40, source="sporttery", selection_label="3球"),
+            OddsQuote(market="total_goals", selection="4", decimal_odds=4.80, source="sporttery", selection_label="4球"),
+            OddsQuote(market="half_full", selection="home_home", decimal_odds=2.05, source="sporttery", selection_label="胜胜"),
+            OddsQuote(market="half_full", selection="draw_home", decimal_odds=4.00, source="sporttery", selection_label="平胜"),
+            OddsQuote(market="half_full", selection="draw_draw", decimal_odds=7.20, source="sporttery", selection_label="平平"),
         ],
     )
 
@@ -200,14 +232,19 @@ def test_selected_parlays_use_only_real_official_odds_from_all_markets():
 
     assert payload.winner_parlays
     assert payload.score_parlays == []
-    parlay = payload.winner_parlays[0]
-    assert parlay.combined_odds == 1.42 * 1.28
-    assert parlay.payout_if_hit_2 == parlay.combined_odds * 2
-    assert all(leg.decimal_odds in {1.42, 1.28} for leg in parlay.legs)
-    assert all(leg.value_label in {"体彩低赔方向", "体彩均衡方向", "体彩高回报方向"} for leg in parlay.legs)
-    assert "真实赔率" in parlay.explanation
-    assert "模型" not in parlay.explanation
+    markets = {parlay.legs[0].market for parlay in payload.winner_parlays}
+    assert {"winner", "handicap_winner", "score", "total_goals", "half_full"}.issubset(markets)
+    winner_parlay = next(parlay for parlay in payload.winner_parlays if parlay.legs[0].market == "winner")
+    assert winner_parlay.combined_odds == 1.42 * 1.28
+    assert winner_parlay.payout_if_hit_2 == winner_parlay.combined_odds * 2
+    assert all(leg.value_label in {"体彩低赔方向", "体彩均衡方向", "体彩高回报方向"} for parlay in payload.winner_parlays for leg in parlay.legs)
+    assert all("真实赔率" in parlay.explanation for parlay in payload.winner_parlays)
+    assert all("模型" not in parlay.explanation for parlay in payload.winner_parlays)
     forbidden = ["模型", "理论", "概率", "折算", "风险", "盈亏", "回报不够"]
-    combined_text = " ".join([parlay.explanation, parlay.value_label, *parlay.reasons, *parlay.warnings])
+    combined_text = " ".join(
+        text
+        for parlay in payload.winner_parlays
+        for text in [parlay.explanation, parlay.value_label, *parlay.reasons, *parlay.warnings]
+    )
     for word in forbidden:
         assert word not in combined_text

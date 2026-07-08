@@ -155,6 +155,19 @@ def select_strategy_leg(match: MatchInput, strategy: StrategyName) -> ParlayLeg 
     return max(legs, key=lambda leg: strategy_leg_score(leg, strategy))
 
 
+def select_strategy_leg_for_market(match: MatchInput, market: str, strategy: StrategyName) -> ParlayLeg | None:
+    legs = [leg for leg in odds_candidate_legs(match) if leg.market == market]
+    if not legs:
+        return None
+    if strategy == "conservative":
+        preferred = [leg for leg in legs if leg.risk != "high"] or legs
+        return max(preferred, key=lambda leg: strategy_leg_score(leg, strategy))
+    if strategy == "return_seeking":
+        plausible = [leg for leg in legs if leg.probability >= 0.08] or legs
+        return max(plausible, key=lambda leg: strategy_leg_score(leg, strategy))
+    return max(legs, key=lambda leg: strategy_leg_score(leg, strategy))
+
+
 def sort_parlays_for_strategy(items: list[ParlayRecommendation], strategy: StrategyName) -> list[ParlayRecommendation]:
     if strategy == "conservative":
         return sorted(items, key=lambda item: (-item.combined_probability, item.leg_count, item.combined_odds))
@@ -174,29 +187,35 @@ def build_odds_parlays(
     if not isinstance(max_legs, int) or isinstance(max_legs, bool) or not 2 <= max_legs <= 6:
         raise ValueError("max_legs must be an integer between 2 and 6")
 
-    selected_legs = [leg for match in matches if (leg := select_strategy_leg(match, strategy)) is not None]
-    if len(selected_legs) < 2:
-        return []
-
     results: list[ParlayRecommendation] = []
-    for leg_count in range(2, min(max_legs, len(selected_legs)) + 1):
-        for selected in combinations(selected_legs, leg_count):
-            legs = list(selected)
-            combined_odds = reduce(mul, (leg.decimal_odds for leg in legs), 1.0)
-            results.append(
-                parlay_from_legs(
-                    legs=legs,
-                    strategy=strategy,
-                    value_label="真实赔率组合",
-                    explanation=(
-                        f"{STRATEGY_LABELS[strategy]} {leg_count}串1：真实赔率相乘为 {combined_odds:.2f}，"
-                        f"2元一注中出返还约 {combined_odds * stake:.2f} 元。"
-                    ),
-                    stake=stake,
+    for market in ODDS_PARLAY_MARKETS:
+        selected_legs = [
+            leg
+            for match in matches
+            if (leg := select_strategy_leg_for_market(match, market, strategy)) is not None
+        ]
+        if len(selected_legs) < 2:
+            continue
+        market_results: list[ParlayRecommendation] = []
+        for leg_count in range(2, min(max_legs, len(selected_legs)) + 1):
+            for selected in combinations(selected_legs, leg_count):
+                legs = list(selected)
+                combined_odds = reduce(mul, (leg.decimal_odds for leg in legs), 1.0)
+                market_results.append(
+                    parlay_from_legs(
+                        legs=legs,
+                        strategy=strategy,
+                        value_label="真实赔率组合",
+                        explanation=(
+                            f"{STRATEGY_LABELS[strategy]} {market_label(market)} {leg_count}串1："
+                            f"真实赔率相乘为 {combined_odds:.2f}，2元一注中出返还约 {combined_odds * stake:.2f} 元。"
+                        ),
+                        stake=stake,
+                    )
                 )
-            )
+        results.extend(sort_parlays_for_strategy(market_results, strategy)[:2])
 
-    return sort_parlays_for_strategy(results, strategy)[:6]
+    return results
 
 
 def build_parlay_reasons(

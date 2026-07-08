@@ -74,6 +74,16 @@ def decision_option_from_quote(quote: OddsQuote, probability: float | None = Non
     )
 
 
+def sorted_official_options(quotes: list[OddsQuote], limit: int = 3) -> list[DecisionOption]:
+    probabilities = normalized_official_probabilities(quotes)
+    ordered = sorted(
+        [(quote, probabilities.get(quote.selection, 0.0)) for quote in quotes],
+        key=lambda item: item[1],
+        reverse=True,
+    )[:limit]
+    return [decision_option_from_quote(quote, probability) for quote, probability in ordered]
+
+
 def favorite_quote(quotes: list[OddsQuote]) -> tuple[OddsQuote, float] | None:
     probabilities = normalized_official_probabilities(quotes)
     if not probabilities:
@@ -232,7 +242,7 @@ def build_decision_for_market(market: str, quotes: list[OddsQuote]) -> MarketDec
         combined_model=None,
         model_weights=None,
         score_candidates=score_candidates_from_quotes(quotes, limit=5) if market == "score" else [],
-        model_suggestions=[],
+        model_suggestions=sorted_official_options(quotes, limit=3),
         market_favorite=market_favorite,
         best_return=best_return,
         missing_info=[],

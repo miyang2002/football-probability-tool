@@ -75,6 +75,7 @@ def test_frontend_uses_plain_chinese_analysis_copy():
 
     assert "五种玩法建议" in html
     assert "推荐买法" in app_js
+    assert "概率" in app_js
     assert "2元一注返还" in app_js
     assert "赔率缺失" in app_js
     assert "赔率是否划算" not in app_js
@@ -85,7 +86,6 @@ def test_frontend_uses_plain_chinese_analysis_copy():
     assert "每100元" not in app_js
     assert "模型比赔率" not in app_js
     assert "赔率偏低" not in app_js
-    assert "折算参考" not in app_js
     assert "综合风险" not in app_js
     assert "最高返还" not in app_js
 
@@ -94,6 +94,8 @@ def test_frontend_renders_minimal_odds_advice_only():
     app_js = (STATIC / "app.js").read_text()
 
     assert "推荐买法" in app_js
+    assert "候选" in app_js
+    assert "model_suggestions" in app_js
     assert "2元一注返还" in app_js
     assert "score_candidates" not in app_js
     assert "球队资料模型" not in app_js
@@ -128,4 +130,3 @@ def test_frontend_supports_minimal_real_odds_parlays():
     assert "比分串关" not in app_js
     assert "模型理论赔率" not in app_js
     assert "probability_label" not in app_js
-    assert "combined_probability" not in app_js

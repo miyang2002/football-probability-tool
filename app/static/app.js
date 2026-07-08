@@ -139,6 +139,21 @@ function odds(value) {
   return Number(value).toFixed(2);
 }
 
+function probability(value) {
+  if (value == null) return "--";
+  return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function optionLine(option) {
+  return `${option.label}，概率 ${probability(option.probability)}，赔率 ${odds(option.decimal_odds)}，2元返还 ${money(option.payout_if_hit_2)}`;
+}
+
+function renderOptionList(decision) {
+  const options = decision.model_suggestions || [];
+  if (!options.length) return "赔率缺失";
+  return options.map((option) => escapeHtml(optionLine(option))).join("<br>");
+}
+
 function adviceReason(decision) {
   if (decision.missing_info?.length) {
     return decision.missing_info.join("；");
@@ -157,9 +172,7 @@ function renderDecisionComparison(decisions) {
       <thead>
         <tr>
           <th>玩法</th>
-          <th>推荐买法</th>
-          <th>赔率</th>
-          <th>2元一注返还</th>
+          <th>推荐买法候选和概率</th>
           <th>理由</th>
         </tr>
       </thead>
@@ -169,9 +182,7 @@ function renderDecisionComparison(decisions) {
             (decision) => `
               <tr>
                 <td>${escapeHtml(decision.market_label)}</td>
-                <td><strong>${escapeHtml(decision.odds_selection_label || decision.market_favorite?.label || "赔率缺失")}</strong></td>
-                <td>${escapeHtml(odds(decision.odds_decimal || decision.market_favorite?.decimal_odds))}</td>
-                <td>${escapeHtml(money(decision.market_favorite?.payout_if_hit_2))}</td>
+                <td>${renderOptionList(decision)}</td>
                 <td>${escapeHtml(adviceReason(decision))}</td>
               </tr>
             `,
