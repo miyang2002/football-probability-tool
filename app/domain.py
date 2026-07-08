@@ -16,6 +16,7 @@ StrategyName = Literal["conservative", "balanced", "return_seeking"]
 RiskLevel = Literal["low", "medium", "high"]
 OddsMovement = Literal["up", "down", "flat"]
 OfficialMarketStatus = Literal["available", "missing", "suspended", "malformed"]
+AdviceLevel = Literal["stable", "balanced", "small", "avoid", "missing"]
 
 
 class TeamInput(BaseModel):
@@ -93,6 +94,25 @@ class PickRecommendation(BaseModel):
     plain_summary: str = ""
 
 
+class MarketDecision(BaseModel):
+    market: MarketName
+    market_label: str
+    model_selection: str | None = None
+    model_selection_label: str | None = None
+    model_probability: float | None = Field(default=None, ge=0, le=1)
+    odds_selection: str | None = None
+    odds_selection_label: str | None = None
+    odds_decimal: float | None = Field(default=None, gt=1)
+    odds_probability: float | None = Field(default=None, ge=0, le=1)
+    edge: float | None = Field(default=None, ge=-1, le=1)
+    expected_value: float | None = Field(default=None, ge=-1)
+    advice_level: AdviceLevel
+    advice_label: str
+    summary: str
+    reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class MatchAnalysis(BaseModel):
     match: MatchInput
     expected_home_goals: float = Field(ge=0)
@@ -106,6 +126,7 @@ class MatchAnalysis(BaseModel):
     score_probabilities: list[ScoreProbability]
     top_scores: list[ScoreProbability]
     recommendations: list[PickRecommendation]
+    decision_comparisons: list[MarketDecision] = Field(default_factory=list)
     data_quality: float = Field(ge=0, le=1)
 
 

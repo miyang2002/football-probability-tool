@@ -6,6 +6,7 @@ from app.domain import (
     MatchAnalysis,
     MatchContext,
     MatchInput,
+    MarketDecision,
     OfficialMarketDiagnostic,
     OfficialOddsMatchDiagnostic,
     OddsQuote,
@@ -78,6 +79,31 @@ def test_official_odds_match_diagnostic_lists_missing_markets():
     )
 
     assert diagnostic.missing_markets == ["score"]
+
+
+def test_market_decision_accepts_model_and_odds_recommendations():
+    decision = MarketDecision(
+        market="winner",
+        market_label="胜平负",
+        model_selection="home",
+        model_selection_label="主胜",
+        model_probability=0.58,
+        odds_selection="home",
+        odds_selection_label="主胜",
+        odds_decimal=1.8,
+        odds_probability=0.54,
+        edge=0.04,
+        expected_value=0.044,
+        advice_level="balanced",
+        advice_label="均衡参考",
+        summary="模型和赔率方向一致。",
+        reasons=["模型推荐主胜。"],
+        warnings=[],
+    )
+
+    assert decision.model_selection_label == "主胜"
+    assert decision.odds_selection_label == "主胜"
+    assert decision.advice_label == "均衡参考"
 
 
 def test_context_defaults_are_conservative():

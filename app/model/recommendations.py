@@ -6,13 +6,24 @@ SELECTION_LABELS = {
     "home": "主胜",
     "draw": "平局",
     "away": "客胜",
+    "home_home": "胜胜",
+    "home_draw": "胜平",
+    "home_away": "胜负",
+    "draw_home": "平胜",
+    "draw_draw": "平平",
+    "draw_away": "平负",
+    "away_home": "负胜",
+    "away_draw": "负平",
+    "away_away": "负负",
 }
 
 MARKET_LABELS = {
     "winner": "胜平负",
+    "handicap_winner": "让球胜平负",
     "total_goals": "总进球",
     "over_under": "大小球",
     "half_time": "半场胜平负",
+    "half_full": "半全场",
     "score": "比分",
 }
 
@@ -24,8 +35,12 @@ def selection_label(selection: str) -> str:
         return f"大于 {selection.removeprefix('over_')} 球"
     if selection.startswith("under_"):
         return f"小于 {selection.removeprefix('under_')} 球"
+    if selection.isdigit():
+        return f"{selection}球"
     if selection == "5+":
         return "5球以上"
+    if selection == "7+":
+        return "7球以上"
     return selection
 
 

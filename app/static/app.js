@@ -1,4 +1,4 @@
-import { pct, renderBars, renderHeatmap, renderScatter } from "./charts.js";
+import { pct, renderBars, renderScatter } from "./charts.js";
 
 const state = {
   matches: [],
@@ -16,8 +16,7 @@ const nodes = {
   winnerBars: document.querySelector("#winner-bars"),
   dataQuality: document.querySelector("#data-quality"),
   scoreBasis: document.querySelector("#score-basis"),
-  scoreHeatmap: document.querySelector("#score-heatmap"),
-  topScores: document.querySelector("#top-scores"),
+  decisionComparison: document.querySelector("#decision-comparison"),
   goalsBars: document.querySelector("#goals-bars"),
   overUnderBars: document.querySelector("#over-under-bars"),
   halfTimeBars: document.querySelector("#half-time-bars"),
@@ -98,6 +97,17 @@ function labelOfficialMarketStatus(status) {
     malformed: "异常",
   };
   return labels[status] || status;
+}
+
+function labelAdviceLevel(level) {
+  const labels = {
+    stable: "稳健参考",
+    balanced: "均衡参考",
+    small: "小额尝试",
+    avoid: "放弃",
+    missing: "信息不足",
+  };
+  return labels[level] || level;
 }
 
 function signedMoney(value) {
@@ -229,18 +239,7 @@ function renderAnalysis(analysis) {
     <p>${escapeHtml(analysis.score_method_summary)}</p>
     <p>${escapeHtml(analysis.odds_basis_summary)}</p>
   `;
-  renderHeatmap(nodes.scoreHeatmap, analysis.score_probabilities);
-  nodes.topScores.innerHTML = `<div class="score-list">${analysis.top_scores
-    .map(
-      (item) => `
-        <div class="score-card">
-          <strong>${item.home_goals}-${item.away_goals}</strong>
-          <span>${pct(item.probability)} · ${escapeHtml(item.outcome_label || "")}</span>
-          <small>${escapeHtml(item.explanation || "")}</small>
-        </div>
-      `,
-    )
-    .join("")}</div>`;
+  renderDecisionComparison(analysis.decision_comparisons || []);
   renderBars(
     nodes.goalsBars,
     analysis.total_goal_probabilities.map((item) => ({ label: labelSelection(item.selection), value: item.probability })),
@@ -256,6 +255,60 @@ function renderAnalysis(analysis) {
     analysis.half_time_probabilities.map((item) => ({ label: labelSelection(item.selection), value: item.probability })),
     "var(--blue)",
   );
+}
+
+function renderDecisionComparison(decisions) {
+  if (!decisions.length) {
+    nodes.decisionComparison.innerHTML = "<p>当前没有可对照的模型和赔率建议。</p>";
+    return;
+  }
+  nodes.decisionComparison.innerHTML = `
+    <div class="decision-list">
+      ${decisions
+        .map(
+          (decision) => `
+            <article class="decision-card ${escapeAttribute(decision.advice_level)}">
+              <div class="decision-title">
+                <strong>${escapeHtml(decision.market_label)}</strong>
+                <span>${escapeHtml(decision.advice_label || labelAdviceLevel(decision.advice_level))}</span>
+              </div>
+              <div class="decision-columns">
+                <div>
+                  <span>模型推荐</span>
+                  <strong>${escapeHtml(decision.model_selection_label || "暂无")}</strong>
+                  <small>${decision.model_probability == null ? "缺少模型概率" : `模型概率 ${pct(decision.model_probability)}`}</small>
+                </div>
+                <div>
+                  <span>赔率推荐</span>
+                  <strong>${escapeHtml(decision.odds_selection_label || "暂无")}</strong>
+                  <small>${
+                    decision.odds_decimal == null
+                      ? "缺少体彩官方赔率"
+                      : `官方赔率 ${Number(decision.odds_decimal).toFixed(2)} · 赔率反推 ${pct(decision.odds_probability || 0)}`
+                  }</small>
+                </div>
+                <div>
+                  <span>综合建议</span>
+                  <strong>${escapeHtml(decision.advice_label || labelAdviceLevel(decision.advice_level))}</strong>
+                  <small>${escapeHtml(decision.summary || "")}</small>
+                </div>
+              </div>
+              ${
+                decision.reasons?.length
+                  ? `<div class="reason-list">${decision.reasons.map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>`
+                  : ""
+              }
+              ${
+                decision.warnings?.length
+                  ? `<div class="warning-list">${decision.warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
+                  : ""
+              }
+            </article>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function renderParlayList(parlays, title, emptyText) {

@@ -72,13 +72,13 @@ def test_match_analysis_endpoint_returns_visualization_payload():
     assert payload["match"]["match_id"] == "wc-001"
     assert payload["winner_probabilities"]
     assert payload["score_probabilities"]
-    assert payload["top_scores"]
+    assert payload["decision_comparisons"]
     assert payload["recommendations"]
-    assert "泊松分布" in payload["score_method_summary"]
+    assert "模型参考" in payload["score_method_summary"]
     assert "胜平负赔率" in payload["odds_basis_summary"]
-    assert payload["top_scores"][0]["outcome_label"] in {"主胜", "平局", "客胜"}
-    assert payload["top_scores"][0]["odds_value_label"]
-    assert "赔率" in payload["top_scores"][0]["explanation"]
+    winner_decision = next(item for item in payload["decision_comparisons"] if item["market"] == "winner")
+    assert winner_decision["model_selection_label"]
+    assert winner_decision["advice_label"]
 
 
 def test_parlay_endpoint_supports_strategy_parameter():

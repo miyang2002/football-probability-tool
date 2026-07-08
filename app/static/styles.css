@@ -241,26 +241,6 @@ p {
   background: var(--green);
 }
 
-.heatmap {
-  display: grid;
-  grid-template-columns: repeat(9, minmax(34px, 1fr));
-  gap: 4px;
-}
-
-#score-heatmap {
-  overflow-x: auto;
-}
-
-.heat-cell {
-  min-height: 38px;
-  border-radius: 6px;
-  display: grid;
-  place-items: center;
-  color: #10201b;
-  font-size: 11px;
-  line-height: 1.2;
-}
-
 .pill {
   display: inline-flex;
   align-items: center;
@@ -451,6 +431,74 @@ p {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.decision-list {
+  display: grid;
+  gap: 10px;
+}
+
+.decision-card {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfc;
+}
+
+.decision-card.stable,
+.decision-card.balanced,
+.decision-card.small {
+  border-color: rgba(34, 122, 92, 0.32);
+}
+
+.decision-card.avoid {
+  border-color: rgba(181, 68, 68, 0.28);
+  background: #fffafa;
+}
+
+.decision-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.decision-title span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.decision-card.avoid .decision-title span {
+  color: var(--red);
+}
+
+.decision-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-columns div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.decision-columns span,
+.decision-columns small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.decision-columns strong {
+  display: block;
+  margin: 4px 0;
+  font-size: 15px;
+  word-break: break-word;
+}
+
 .leg-row strong {
   display: block;
   margin-bottom: 4px;
@@ -561,7 +609,8 @@ svg {
   }
 
   .quick-stats,
-  .parlay-focus {
+  .parlay-focus,
+  .decision-columns {
     grid-template-columns: 1fr;
   }
 

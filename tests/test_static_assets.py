@@ -15,7 +15,8 @@ def test_index_contains_visual_regions():
     html = (STATIC / "index.html").read_text()
 
     assert "match-list" in html
-    assert "score-heatmap" in html
+    assert "decision-comparison" in html
+    assert "score-heatmap" not in html
     assert "parlay-results" in html
     assert "feed-status" in html
     assert "match-window" in html
@@ -47,15 +48,12 @@ def test_frontend_escapes_dynamic_html_and_attributes():
     assert "escapeAttribute(`${label} ${pct(item.probability)}`)" in charts_js
 
 
-def test_heatmap_handles_zero_probability_and_mobile_overflow():
+def test_chart_helpers_handle_zero_probability():
     charts_js = (STATIC / "charts.js").read_text()
-    css = (STATIC / "styles.css").read_text()
 
     assert "maxProbability <= 0" in charts_js
     assert 'node.innerHTML = "<p>暂无有效比分分布。</p>";' in charts_js
     assert "NaN" not in charts_js
-    assert "#score-heatmap" in css
-    assert "overflow-x: auto" in css
 
 
 def test_frontend_auto_refreshes_feed_and_displays_odds_movement():
@@ -78,7 +76,10 @@ def test_frontend_uses_plain_chinese_analysis_copy():
     app_js = (STATIC / "app.js").read_text()
 
     assert "一句话结论" in html
-    assert "比分依据" in html
+    assert "模型依据" in html
+    assert "模型推荐" in app_js
+    assert "赔率推荐" in app_js
+    assert "综合建议" in app_js
     assert "赔率是否划算" in app_js
     assert "最稳一关" in app_js
     assert "2元一注理论盈亏" in app_js

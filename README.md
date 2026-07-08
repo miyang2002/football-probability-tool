@@ -6,7 +6,7 @@ Local personal-use football probability analysis website.
 
 - Match dashboard with sample or live China Sports Lottery fixtures.
 - Win/draw/loss probability analysis.
-- Scoreline probability heatmap.
+- Model recommendation, official odds recommendation, and final advice comparison.
 - Total-goals and over/under distributions.
 - Half-time win/draw/loss estimates.
 - Model-versus-odds recommendation engine.
