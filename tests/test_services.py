@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from app.domain import MatchContext, MatchInput, OddsQuote, PickRecommendation, TeamInput
-from app.services import analyze_match, collect_best_picks
+from app.services import analyze_match, build_selected_parlay_analysis, collect_best_picks
 
 
 def pick(match_id: str, selection: str, probability: float, edge: float | None) -> PickRecommendation:
@@ -69,20 +69,26 @@ def test_analysis_builds_five_plain_market_decisions_with_payouts():
     decisions = {decision.market: decision for decision in analysis.decision_comparisons}
 
     assert set(decisions) == {"winner", "handicap_winner", "score", "total_goals", "half_full"}
-    assert all(decision.advice_label in {"建议", "小额参考", "谨慎", "放弃", "仅作娱乐参考"} for decision in decisions.values())
-    assert decisions["winner"].model_suggestions
-    assert decisions["handicap_winner"].model_suggestions
-    assert decisions["score"].model_suggestions
-    assert len(decisions["score"].model_suggestions) == 3
-    assert decisions["total_goals"].model_suggestions
-    assert decisions["half_full"].model_suggestions
+    assert all(decision.advice_label in {"可作串关胆", "可以参考", "谨慎参考", "娱乐参考", "赔率缺失"} for decision in decisions.values())
+    assert decisions["winner"].official_model.selection == "home"
+    assert decisions["winner"].team_model is None
+    assert decisions["winner"].combined_model is None
+    assert decisions["winner"].model_weights is None
+    assert decisions["handicap_winner"].official_model.selection == "away"
+    assert decisions["score"].official_model.selection == "1-0"
+    assert len(decisions["score"].score_candidates) == 3
+    assert decisions["total_goals"].official_model.selection == "2"
+    assert decisions["half_full"].official_model.selection == "home_home"
     assert decisions["score"].market_favorite.payout_if_hit_2 == 11.6
     assert decisions["score"].best_return.payout_if_hit_2 is not None
     assert "官方胜平负赔率缺失" not in decisions["winner"].missing_info
-    assert "球队近况未抓到" in decisions["winner"].missing_info
+    assert decisions["winner"].missing_info == []
+    assert "体彩" in decisions["winner"].summary
+    assert "球队" not in decisions["winner"].summary
+    assert "模型" not in decisions["winner"].summary
 
 
-def test_analysis_returns_two_model_fields_and_score_candidates():
+def test_analysis_returns_official_odds_only_score_candidates():
     match = MatchInput(
         match_id="m-score",
         competition="世界杯",
@@ -115,13 +121,17 @@ def test_analysis_returns_two_model_fields_and_score_candidates():
     score_decision = decisions["score"]
 
     assert score_decision.official_model is not None
-    assert score_decision.team_model is not None
-    assert score_decision.combined_model is not None
-    assert score_decision.model_weights is not None
+    assert score_decision.team_model is None
+    assert score_decision.combined_model is None
+    assert score_decision.model_weights is None
     assert score_decision.score_candidates
     assert any(candidate.selection == "home_other" for candidate in score_decision.score_candidates)
-    assert "球队近况未抓到" in score_decision.missing_info
+    assert all(candidate.team_probability is None for candidate in score_decision.score_candidates)
+    assert all(candidate.combined_probability is None for candidate in score_decision.score_candidates)
+    assert all(candidate.official_probability is not None for candidate in score_decision.score_candidates)
+    assert "球队近况未抓到" not in score_decision.missing_info
     assert "2元" in score_decision.summary
+    assert "模型" not in score_decision.summary
 
 
 def test_different_score_odds_produce_different_official_score_recommendations():
@@ -156,3 +166,44 @@ def test_different_score_odds_produce_different_official_score_recommendations()
 
     assert first_score.official_model.selection == "1-0"
     assert second_score.official_model.selection == "2-1"
+
+
+def test_selected_parlays_use_only_real_official_odds_from_all_markets():
+    first = MatchInput(
+        match_id="m1",
+        competition="世界杯",
+        kickoff_utc="2026-07-10T04:00:00Z",
+        home=TeamInput(name="法国", attack_rating=1.0, defense_rating=1.0),
+        away=TeamInput(name="摩洛哥", attack_rating=1.0, defense_rating=1.0),
+        odds=[
+            OddsQuote(market="winner", selection="home", decimal_odds=1.42, source="sporttery", selection_label="主胜", movement="down"),
+            OddsQuote(market="winner", selection="draw", decimal_odds=3.85, source="sporttery", selection_label="平局"),
+            OddsQuote(market="winner", selection="away", decimal_odds=6.45, source="sporttery", selection_label="客胜"),
+            OddsQuote(market="score", selection="1-0", decimal_odds=5.80, source="sporttery", selection_label="1-0"),
+        ],
+    )
+    second = MatchInput(
+        match_id="m2",
+        competition="世界杯",
+        kickoff_utc="2026-07-11T04:00:00Z",
+        home=TeamInput(name="阿根廷", attack_rating=1.0, defense_rating=1.0),
+        away=TeamInput(name="埃及", attack_rating=1.0, defense_rating=1.0),
+        odds=[
+            OddsQuote(market="winner", selection="home", decimal_odds=1.28, source="sporttery", selection_label="主胜", movement="flat"),
+            OddsQuote(market="winner", selection="draw", decimal_odds=4.80, source="sporttery", selection_label="平局"),
+            OddsQuote(market="winner", selection="away", decimal_odds=9.00, source="sporttery", selection_label="客胜"),
+            OddsQuote(market="total_goals", selection="2", decimal_odds=3.10, source="sporttery", selection_label="2球"),
+        ],
+    )
+
+    payload = build_selected_parlay_analysis([first, second], ["m1", "m2"], "conservative")
+
+    assert payload.winner_parlays
+    assert payload.score_parlays == []
+    parlay = payload.winner_parlays[0]
+    assert parlay.combined_odds == 1.42 * 1.28
+    assert parlay.payout_if_hit_2 == parlay.combined_odds * 2
+    assert all(leg.decimal_odds in {1.42, 1.28} for leg in parlay.legs)
+    assert all(leg.value_label in {"体彩低赔方向", "体彩均衡方向", "体彩高回报方向"} for leg in parlay.legs)
+    assert "真实赔率" in parlay.explanation
+    assert "模型" not in parlay.explanation

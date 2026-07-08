@@ -73,46 +73,36 @@ def test_match_analysis_endpoint_returns_visualization_payload():
     assert payload["winner_probabilities"]
     assert payload["score_probabilities"]
     assert payload["decision_comparisons"]
-    assert payload["recommendations"]
-    assert "模型参考" in payload["score_method_summary"]
-    assert "胜平负赔率" in payload["odds_basis_summary"]
+    assert payload["recommendations"] == []
+    assert "体彩赔率" in payload["score_method_summary"]
+    assert "体彩官方赔率" in payload["odds_basis_summary"]
     winner_decision = next(item for item in payload["decision_comparisons"] if item["market"] == "winner")
-    assert winner_decision["model_selection_label"]
+    assert winner_decision["model_selection_label"] is None
     assert winner_decision["advice_label"]
-    assert winner_decision["advice_label"] in {"建议", "小额参考", "谨慎", "放弃"}
+    assert winner_decision["advice_label"] in {"可作串关胆", "可以参考", "谨慎参考", "娱乐参考", "赔率缺失"}
     assert "model_suggestions" in winner_decision
     assert "market_favorite" in winner_decision
     assert "best_return" in winner_decision
     assert "missing_info" in winner_decision
 
 
-def test_match_analysis_endpoint_returns_two_model_advice_and_score_candidates():
+def test_match_analysis_endpoint_returns_official_odds_only_advice():
     payload = get_json("/api/matches/wc-001/analysis")
     score = next(item for item in payload["decision_comparisons"] if item["market"] == "score")
 
     assert "official_model" in score
-    assert "team_model" in score
-    assert "combined_model" in score
-    assert "model_weights" in score
-    assert "official" in score["model_weights"]
-    assert "team" in score["model_weights"]
+    assert score["team_model"] is None
+    assert score["combined_model"] is None
+    assert score["model_weights"] is None
     assert isinstance(score["score_candidates"], list)
     assert "summary" in score
-    assert "球队近况未抓到" in score["missing_info"]
+    assert "球队近况未抓到" not in score["missing_info"]
 
 
 def test_parlay_endpoint_supports_strategy_parameter():
     payload = get_json("/api/parlays?strategy=balanced")
 
-    assert payload
-    assert payload[0]["strategy"] == "balanced"
-    assert payload[0]["strategy_label"] == "均衡"
-    assert payload[0]["probability_label"]
-    assert payload[0]["value_label"]
-    assert payload[0]["expected_profit_100"] is not None
-    assert payload[0]["strongest_leg"]
-    assert payload[0]["weakest_leg"]
-    assert payload[0]["reasons"]
+    assert payload == []
 
 
 def test_selected_parlays_endpoint_returns_winner_and_score_combinations_with_two_yuan_returns():
@@ -120,21 +110,5 @@ def test_selected_parlays_endpoint_returns_winner_and_score_combinations_with_tw
 
     assert payload["selected_match_ids"] == ["wc-001", "wc-002", "wc-003"]
     assert payload["stake"] == 2
-    assert payload["winner_parlays"]
-    assert payload["score_parlays"]
-
-    winner = payload["winner_parlays"][0]
-    assert winner["leg_count"] == 2
-    assert winner["payout_if_hit_2"] == pytest.approx(winner["combined_odds"] * 2)
-    assert winner["expected_profit_2"] == pytest.approx(winner["expected_value"] * 2)
-    assert {leg["match_id"] for leg in winner["legs"]}.issubset(set(payload["selected_match_ids"]))
-    assert all(leg["market"] == "winner" for leg in winner["legs"])
-    assert any("2元一注" in reason for reason in winner["reasons"])
-
-    score = payload["score_parlays"][0]
-    assert score["leg_count"] == 2
-    assert score["payout_if_hit_2"] == pytest.approx(score["combined_odds"] * 2)
-    assert score["expected_profit_2"] == pytest.approx(score["expected_value"] * 2)
-    assert all(leg["market"] == "score" for leg in score["legs"])
-    assert all("-" in leg["selection"] for leg in score["legs"])
-    assert any("模型理论赔率" in warning for warning in score["warnings"])
+    assert payload["winner_parlays"] == []
+    assert payload["score_parlays"] == []

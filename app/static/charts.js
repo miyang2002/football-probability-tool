@@ -62,13 +62,13 @@ export function renderScatter(node, parlays) {
   const width = 640;
   const height = 220;
   const padding = 28;
-  const maxProfit = Math.max(5, ...parlays.map((item) => Math.max(0, item.expected_profit_100 ?? item.expected_value * 100)));
+  const maxPayout = Math.max(5, ...parlays.map((item) => Math.max(0, item.payout_if_hit_2 ?? item.combined_odds * 2)));
   const points = parlays
     .map((item) => {
       const x = padding + item.combined_probability * (width - padding * 2);
-      const profit = item.expected_profit_100 ?? item.expected_value * 100;
-      const y = height - padding - (Math.max(0, profit) / maxProfit) * (height - padding * 2);
-      return `<circle cx="${x}" cy="${y}" r="${7 + item.leg_count}" fill="#2f5f98"><title>${item.leg_count}串1 预计命中 ${pct(item.combined_probability)} 长期理论盈亏 ${profit.toFixed(1)}元</title></circle>`;
+      const payout = item.payout_if_hit_2 ?? item.combined_odds * 2;
+      const y = height - padding - (Math.max(0, payout) / maxPayout) * (height - padding * 2);
+      return `<circle cx="${x}" cy="${y}" r="${7 + item.leg_count}" fill="#2f5f98"><title>${item.leg_count}串1 赔率折算 ${pct(item.combined_probability)} 2元返还 ${payout.toFixed(1)}元</title></circle>`;
     })
     .join("");
 
@@ -77,8 +77,8 @@ export function renderScatter(node, parlays) {
       <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#d9e1df" />
       <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="#d9e1df" />
       ${points}
-      <text x="${padding}" y="${height - 6}" font-size="12">预计命中</text>
-      <text x="4" y="${padding}" font-size="12">理论盈亏</text>
+      <text x="${padding}" y="${height - 6}" font-size="12">赔率折算</text>
+      <text x="4" y="${padding}" font-size="12">2元返还</text>
     </svg>
   `;
 }

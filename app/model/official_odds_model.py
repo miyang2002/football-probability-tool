@@ -74,7 +74,7 @@ def best_return_reference(
         payout_if_hit_2=payout_if_hit_2(quote.decimal_odds),
         confidence_label="中",
         rank=None,
-        reasons=[f"{label}在模型候选中2元返还更高。"],
+        reasons=[f"{label}在候选中2元返还更高。"],
     )
 
 

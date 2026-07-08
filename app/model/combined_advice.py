@@ -1,16 +1,14 @@
-from app.data.team_info import MissingTeamInfoProvider, TeamInfoProvider, team_model_weight
 from app.domain import (
     DecisionOption,
     MarketDecision,
     MatchInput,
     ModelAdviceLine,
-    ModelWeights,
     OddsQuote,
+    ScoreCandidate,
     ScoreProbability,
 )
-from app.model.official_odds_model import best_return_reference, market_favorite, payout_if_hit_2
+from app.model.official_odds_model import normalized_official_probabilities, payout_if_hit_2
 from app.model.recommendations import market_label
-from app.model.score_candidates import build_score_candidates, team_score_probabilities_by_official_option
 
 
 DECISION_MARKETS = ("winner", "handicap_winner", "score", "total_goals", "half_full")
@@ -36,7 +34,7 @@ def official_quotes(odds: list[OddsQuote], market: str) -> list[OddsQuote]:
 
 
 def quote_label(quote: OddsQuote) -> str:
-    return quote.selection_label or quote.selection
+    return quote.selection_label or selection_label(quote.market, quote.selection)
 
 
 def selection_label(market: str, selection: str) -> str:
@@ -47,209 +45,219 @@ def selection_label(market: str, selection: str) -> str:
     return selection
 
 
-def decision_option_from_line(line: ModelAdviceLine | None) -> DecisionOption | None:
-    if line is None or line.selection is None:
-        return None
+def probability_text(probability: float | None) -> str:
+    if probability is None:
+        return "无法折算"
+    return f"{probability:.1%}"
+
+
+def movement_text(quote: OddsQuote) -> str:
+    direction = {
+        "down": "赔率下降，说明这个方向的回报变低，市场更偏向它",
+        "up": "赔率上升，说明这个方向的回报变高，市场支持变弱",
+        "flat": "赔率暂时没有明显变化",
+        None: "暂时没有赔率变化记录",
+    }.get(quote.movement, "暂时没有赔率变化记录")
+    if quote.previous_decimal_odds is not None:
+        return f"{direction}，从 {quote.previous_decimal_odds:.2f} 到 {quote.decimal_odds:.2f}"
+    return direction
+
+
+def decision_option_from_quote(quote: OddsQuote, probability: float | None = None) -> DecisionOption:
     return DecisionOption(
-        selection=line.selection,
-        label=line.selection_label or line.label,
-        probability=line.probability,
-        decimal_odds=line.decimal_odds,
-        payout_if_hit_2=line.payout_if_hit_2,
-        source=line.source,
+        selection=quote.selection,
+        label=quote_label(quote),
+        probability=probability,
+        decimal_odds=quote.decimal_odds,
+        payout_if_hit_2=payout_if_hit_2(quote.decimal_odds),
+        source=quote.source,
     )
 
 
-def sorted_model_options(
-    market: str,
-    probabilities: dict[str, float],
-    quotes: list[OddsQuote],
-    limit: int,
-) -> list[DecisionOption]:
+def favorite_quote(quotes: list[OddsQuote]) -> tuple[OddsQuote, float] | None:
+    probabilities = normalized_official_probabilities(quotes)
+    if not probabilities:
+        return None
     quote_by_selection = {quote.selection: quote for quote in quotes}
-    candidate_selections = set(quote_by_selection) if quotes else set(probabilities)
-    candidates = [
-        (selection, probabilities[selection])
-        for selection in candidate_selections
-        if selection in probabilities
-    ]
-    ordered = sorted(candidates, key=lambda item: item[1], reverse=True)[:limit]
-    options = []
-    for selection, probability in ordered:
-        quote = quote_by_selection.get(selection)
-        decimal_odds = quote.decimal_odds if quote else None
-        options.append(
-            DecisionOption(
-                selection=selection,
-                label=quote_label(quote) if quote else selection_label(market, selection),
-                probability=probability,
-                decimal_odds=decimal_odds,
-                payout_if_hit_2=payout_if_hit_2(decimal_odds),
-                source=quote.source if quote else None,
-            )
-        )
-    return options
+    selection = max(probabilities, key=probabilities.get)
+    quote = quote_by_selection[selection]
+    return quote, probabilities[selection]
 
 
-def plain_missing_team_line(market: str, missing_info: list[str]) -> ModelAdviceLine:
+def highest_return_quote(quotes: list[OddsQuote]) -> tuple[OddsQuote, float | None] | None:
+    if not quotes:
+        return None
+    probabilities = normalized_official_probabilities(quotes)
+    quote = max(quotes, key=lambda item: item.decimal_odds)
+    return quote, probabilities.get(quote.selection)
+
+
+def confidence_label(market: str, quote: OddsQuote, probability: float) -> str:
+    if market == "score":
+        return "娱乐"
+    if quote.decimal_odds <= 1.45 or probability >= 0.62:
+        return "较稳"
+    if quote.decimal_odds <= 2.25 or probability >= 0.42:
+        return "中等"
+    return "偏谨慎"
+
+
+def advice_level_and_label(market: str, quote: OddsQuote, probability: float) -> tuple[str, str]:
+    if market == "score":
+        return "small", "娱乐参考"
+    if market == "half_full":
+        return "balanced", "谨慎参考"
+    if quote.decimal_odds <= 1.45 or probability >= 0.62:
+        return "stable", "可作串关胆"
+    if quote.decimal_odds <= 2.25 or probability >= 0.42:
+        return "small", "可以参考"
+    return "balanced", "谨慎参考"
+
+
+def official_line(market: str, quote: OddsQuote, probability: float) -> ModelAdviceLine:
+    label = quote_label(quote)
     return ModelAdviceLine(
-        source="team_info",
-        label="球队资料缺失",
-        selection=None,
-        selection_label=None,
-        probability=None,
-        confidence_label="低",
-        reasons=[f"{market_label(market)}暂时没有足够球队资料，综合建议主要依据体彩赔率。", *missing_info],
-    )
-
-
-def top_team_line(market: str, probabilities: dict[str, float], missing_info: list[str]) -> ModelAdviceLine:
-    if missing_info or not probabilities:
-        return plain_missing_team_line(market, missing_info)
-    selection, probability = max(probabilities.items(), key=lambda item: item[1])
-    label = selection_label(market, selection)
-    return ModelAdviceLine(
-        source="team_info",
-        label=f"球队资料模型看好{label}",
-        selection=selection,
+        source="official_odds",
+        label=f"体彩最看好{label}",
+        selection=quote.selection,
         selection_label=label,
         probability=probability,
-        confidence_label="中",
+        decimal_odds=quote.decimal_odds,
+        payout_if_hit_2=payout_if_hit_2(quote.decimal_odds),
+        confidence_label=confidence_label(market, quote, probability),
         rank=1,
-        reasons=["根据当前球队资料模型得到的参考方向。"],
+        reasons=[
+            f"体彩{market_label(market)}最低赔率是{label} {quote.decimal_odds:.2f}。",
+            f"按这一组赔率折算，占比约{probability_text(probability)}。",
+            movement_text(quote),
+        ],
     )
 
 
-def combine_lines(
-    official: ModelAdviceLine | None,
-    team: ModelAdviceLine | None,
-    official_weight: float,
-    team_weight: float,
-) -> ModelAdviceLine:
-    chosen = official or (team if team and team.selection else None)
-    if chosen is None:
-        return ModelAdviceLine(
-            source="combined",
-            label="综合暂时没有明确方向",
-            confidence_label="低",
-            reasons=["官方赔率和球队资料都不足。"],
+def score_candidates_from_quotes(quotes: list[OddsQuote], limit: int = 5) -> list[ScoreCandidate]:
+    probabilities = normalized_official_probabilities(quotes)
+    quote_rows = sorted(
+        [(quote, probabilities.get(quote.selection, 0.0)) for quote in quotes],
+        key=lambda item: item[1],
+        reverse=True,
+    )[:limit]
+    candidates: list[ScoreCandidate] = []
+    for rank, (quote, probability) in enumerate(quote_rows, start=1):
+        label = quote_label(quote)
+        payout = payout_if_hit_2(quote.decimal_odds)
+        candidates.append(
+            ScoreCandidate(
+                selection=quote.selection,
+                label=label,
+                official_option_label=label,
+                official_probability=probability,
+                decimal_odds=quote.decimal_odds,
+                payout_if_hit_2=payout,
+                confidence_label=confidence_label("score", quote, probability),
+                rank=rank,
+                reason=(
+                    f"体彩比分赔率{quote.decimal_odds:.2f}，折算占比约{probability_text(probability)}，"
+                    f"2元一注中出返还{payout:.2f}元。"
+                ),
+            )
         )
-    return ModelAdviceLine(
-        source="combined",
-        label=f"综合参考{chosen.selection_label or chosen.label}",
-        selection=chosen.selection,
-        selection_label=chosen.selection_label,
-        probability=chosen.probability,
-        decimal_odds=chosen.decimal_odds,
-        payout_if_hit_2=chosen.payout_if_hit_2,
-        confidence_label=chosen.confidence_label,
-        rank=chosen.rank,
-        reasons=[f"当前权重：赔率模型{official_weight:.0%}，球队资料模型{team_weight:.0%}。"],
+    return candidates
+
+
+def missing_decision(market: str) -> MarketDecision:
+    label = market_label(market)
+    missing = [f"体彩{label}赔率缺失"]
+    summary = f"没有抓到体彩{label}赔率；这项暂时不推荐，等赔率数据刷新后再看。"
+    return MarketDecision(
+        market=market,
+        market_label=label,
+        official_model=None,
+        team_model=None,
+        combined_model=None,
+        model_weights=None,
+        score_candidates=[],
+        model_suggestions=[],
+        market_favorite=None,
+        best_return=None,
+        missing_info=missing,
+        model_selection=None,
+        model_selection_label=None,
+        model_probability=None,
+        odds_selection=None,
+        odds_selection_label=None,
+        odds_decimal=None,
+        odds_probability=None,
+        edge=None,
+        expected_value=None,
+        advice_level="missing",
+        advice_label="赔率缺失",
+        summary=summary,
+        reasons=[summary],
+        warnings=missing,
     )
 
 
-def advice_level_and_label(combined: ModelAdviceLine, missing_info: list[str], is_score: bool) -> tuple[str, str]:
-    if is_score and missing_info:
-        return "small", "仅作娱乐参考"
-    if missing_info:
-        return "balanced", "谨慎"
-    if combined.confidence_label == "高":
-        return "stable", "建议"
-    if combined.confidence_label == "中":
-        return "small", "小额参考"
-    return "balanced", "谨慎"
+def build_decision_for_market(market: str, quotes: list[OddsQuote]) -> MarketDecision:
+    favorite = favorite_quote(quotes)
+    if favorite is None:
+        return missing_decision(market)
 
-
-def summary_for_market(
-    official: ModelAdviceLine | None,
-    team: ModelAdviceLine | None,
-    combined: ModelAdviceLine,
-    best_return: ModelAdviceLine | None,
-    advice_label: str,
-) -> str:
-    if official and official.decimal_odds and official.payout_if_hit_2 is not None:
-        official_text = (
-            f"体彩更看好{official.selection_label}，赔率{official.decimal_odds:.2f}，"
-            f"2元一注中出返还{official.payout_if_hit_2:.2f}元。"
+    favorite, favorite_probability = favorite
+    official = official_line(market, favorite, favorite_probability)
+    return_quote = highest_return_quote(quotes)
+    best_return = decision_option_from_quote(*return_quote) if return_quote else None
+    market_favorite = decision_option_from_quote(favorite, favorite_probability)
+    advice_level, advice_label = advice_level_and_label(market, favorite, favorite_probability)
+    favorite_payout = payout_if_hit_2(favorite.decimal_odds)
+    return_text = ""
+    if best_return and best_return.decimal_odds and best_return.payout_if_hit_2 is not None:
+        return_text = (
+            f"最高返还是{best_return.label}，赔率{best_return.decimal_odds:.2f}，"
+            f"2元中出返还{best_return.payout_if_hit_2:.2f}元。"
         )
-    else:
-        official_text = "体彩赔率参考不足。"
-    if team and team.selection:
-        team_text = f"球队资料模型看好{team.selection_label or team.label}。"
-    else:
-        team_text = "球队资料缺失。"
-    if best_return and best_return.payout_if_hit_2 is not None:
-        return_text = f"回报参考{best_return.selection_label}，2元一注中出返还{best_return.payout_if_hit_2:.2f}元。"
-    else:
-        return_text = "回报参考不足。"
-    return f"{official_text}{team_text}{return_text}综合方案：{combined.selection_label or combined.label}，{advice_label}。"
+    summary = (
+        f"体彩{market_label(market)}最低赔率是{quote_label(favorite)} {favorite.decimal_odds:.2f}，"
+        f"折算占比约{probability_text(favorite_probability)}，2元一注中出返还{favorite_payout:.2f}元。"
+        f"{movement_text(favorite)}。{return_text}综合买法：{quote_label(favorite)}，{advice_label}。"
+    )
+    reasons = [*official.reasons]
+    if return_text:
+        reasons.append(return_text)
+    reasons.append(f"综合买法：{quote_label(favorite)}，{advice_label}。")
+    return MarketDecision(
+        market=market,
+        market_label=market_label(market),
+        official_model=official,
+        team_model=None,
+        combined_model=None,
+        model_weights=None,
+        score_candidates=score_candidates_from_quotes(quotes, limit=5) if market == "score" else [],
+        model_suggestions=[],
+        market_favorite=market_favorite,
+        best_return=best_return,
+        missing_info=[],
+        model_selection=None,
+        model_selection_label=None,
+        model_probability=None,
+        odds_selection=favorite.selection,
+        odds_selection_label=quote_label(favorite),
+        odds_decimal=favorite.decimal_odds,
+        odds_probability=favorite_probability,
+        edge=None,
+        expected_value=None,
+        advice_level=advice_level,
+        advice_label=advice_label,
+        summary=summary,
+        reasons=reasons,
+        warnings=[],
+    )
 
 
 def build_market_decisions(
     match: MatchInput,
     model_probabilities: dict[str, dict[str, float]],
     score_matrix: list[ScoreProbability],
-    team_provider: TeamInfoProvider | None = None,
+    team_provider=None,
 ) -> list[MarketDecision]:
-    snapshot = (team_provider or MissingTeamInfoProvider()).snapshot(match)
-    team_weight = team_model_weight(snapshot)
-    official_weight = 1.0 - team_weight
-    decisions: list[MarketDecision] = []
-    for market in DECISION_MARKETS:
-        quotes = official_quotes(match.odds, market)
-        missing = list(snapshot.missing_info)
-        if not quotes:
-            missing.append(f"官方{market_label(market)}赔率缺失")
-        probabilities = model_probabilities.get(market, {})
-        official = market_favorite(market, quotes)
-        team = top_team_line(market, probabilities, snapshot.missing_info)
-        best_return = best_return_reference(market, quotes, probabilities)
-        score_candidates = []
-        if market == "score":
-            team_score_probabilities = team_score_probabilities_by_official_option(score_matrix, quotes) if quotes else {}
-            score_candidates = build_score_candidates(
-                quotes=quotes,
-                team_probabilities=team_score_probabilities,
-                winner_probabilities=model_probabilities.get("winner", {}),
-                handicap_probabilities=model_probabilities.get("handicap_winner", {}),
-                total_goal_probabilities=model_probabilities.get("total_goals", {}),
-                half_full_probabilities=model_probabilities.get("half_full", {}),
-                official_weight=official_weight,
-                team_weight=team_weight,
-            )
-        combined = combine_lines(official, team, official_weight, team_weight)
-        advice_level, advice_label = advice_level_and_label(combined, missing, market == "score")
-        summary = summary_for_market(official, team, combined, best_return, advice_label)
-        model_suggestions = sorted_model_options(market, probabilities, quotes, limit=3 if market == "score" else 1)
-        market_favorite_option = decision_option_from_line(official)
-        best_return_option = decision_option_from_line(best_return)
-        decisions.append(
-            MarketDecision(
-                market=market,
-                market_label=market_label(market),
-                official_model=official,
-                team_model=team,
-                combined_model=combined,
-                model_weights=ModelWeights(official=official_weight, team=team_weight),
-                score_candidates=score_candidates,
-                model_suggestions=model_suggestions,
-                market_favorite=market_favorite_option,
-                best_return=best_return_option,
-                missing_info=missing,
-                model_selection=model_suggestions[0].selection if model_suggestions else None,
-                model_selection_label=model_suggestions[0].label if model_suggestions else None,
-                model_probability=model_suggestions[0].probability if model_suggestions else None,
-                odds_selection=official.selection if official else None,
-                odds_selection_label=official.selection_label if official else None,
-                odds_decimal=official.decimal_odds if official else None,
-                odds_probability=official.probability if official else None,
-                edge=None,
-                expected_value=None,
-                advice_level=advice_level,
-                advice_label=advice_label,
-                summary=summary,
-                reasons=[summary],
-                warnings=missing,
-            )
-        )
-    return decisions
+    del model_probabilities, score_matrix, team_provider
+    return [build_decision_for_market(market, official_quotes(match.odds, market)) for market in DECISION_MARKETS]

@@ -16,7 +16,7 @@ from app.domain import (
 )
 from app.model.odds import expected_value, implied_probability
 from app.model.combined_advice import build_market_decisions
-from app.model.parlay import build_parlays, build_score_parlays, build_selected_winner_parlays
+from app.model.parlay import build_odds_parlays
 from app.model.recommendations import build_recommendations, market_label, price_value_label, selection_label
 from app.model.score_model import (
     aggregate_score_matrix,
@@ -78,7 +78,7 @@ def enrich_score_probabilities(
             value_label = price_value_label(ev, edge)
             odds_text = (
                 f"{outcome_label}赔率 {decimal_odds:.2f}，赔率反推概率约 {implied:.1%}，"
-                f"模型给到 {outcome_probability:.1%}，判断为：{value_label}。"
+                f"旧概率字段给到 {outcome_probability:.1%}，判断为：{value_label}。"
             )
 
         enriched.append(
@@ -92,7 +92,7 @@ def enrich_score_probabilities(
                 odds_value_label=value_label,
                 explanation=(
                     f"{score.home_goals}-{score.away_goals} 属于{outcome_label}方向。"
-                    f"比分概率来自预期进球模型参考；{odds_text}"
+                    f"页面推荐不使用这个比分概率，只看体彩比分赔率；{odds_text}"
                 ),
             )
         )
@@ -101,16 +101,16 @@ def enrich_score_probabilities(
 
 
 def score_method_summary(home_xg: float, away_xg: float) -> str:
+    del home_xg, away_xg
     return (
-        f"模型参考：先估算两队预期进球为 {home_xg:.2f} - {away_xg:.2f}，"
-        "再生成比分和进球数排序；这些结果只作参考，需要结合官方赔率判断。"
+        "比分、总进球和半全场建议只看体彩赔率；赔率越低，代表体彩这一组数字里市场越偏向该选项。"
     )
 
 
 def odds_basis_summary(odds: list[OddsQuote]) -> str:
     if any(quote.market == "winner" and quote.source == "sporttery" for quote in odds):
-        return "当前接入体彩官方胜平负赔率；综合建议会分开展示模型推荐和赔率推荐。"
-    return "当前没有体彩官方胜平负赔率；模型结果只作参考，不能判断官方赔率是否划算。"
+        return "当前接入体彩官方赔率；页面推荐只根据体彩赔率和赔率变化生成。"
+    return "当前没有体彩官方赔率；不会用示例赔率或旧概率字段冒充真实推荐。"
 
 
 def official_market_quotes(odds: list[OddsQuote], market: str) -> list[OddsQuote]:
@@ -301,13 +301,13 @@ def decision_summary(
     if missing_info:
         return f"{market_label_text}缺少官方赔率，市场建议和2元返还无法准确计算。"
     if not model_suggestions:
-        return f"{market_label_text}模型依据不足，只能看市场赔率，建议谨慎。"
+        return f"{market_label_text}旧概率字段不足，只能看市场赔率，建议谨慎。"
     top_model = model_suggestions[0]
     if market_favorite and best_return and top_model.selection == market_favorite.selection == best_return.selection:
-        return f"模型、市场热度和赔率回报都指向{top_model.label}，综合建议：{advice_label}。"
+        return f"旧概率字段、市场热度和赔率回报都指向{top_model.label}，综合建议：{advice_label}。"
     if market_favorite and top_model.selection != market_favorite.selection:
-        return f"模型看好{top_model.label}，市场更支持{market_favorite.label}，两边存在分歧，综合建议：{advice_label}。"
-    return f"模型参考和赔率参考部分一致，综合建议：{advice_label}。"
+        return f"旧概率字段看好{top_model.label}，市场更支持{market_favorite.label}，两边存在分歧，综合建议：{advice_label}。"
+    return f"旧概率字段和赔率参考部分一致，综合建议：{advice_label}。"
 
 
 def build_decision_summary(
@@ -327,7 +327,7 @@ def build_decision_summary(
     summary = decision_summary(current_market_label, model_suggestions, favorite, best_return, advice_label, missing)
     reasons = []
     if model_suggestions:
-        reasons.append("模型建议：" + " / ".join(option.label for option in model_suggestions))
+        reasons.append("旧概率字段建议：" + " / ".join(option.label for option in model_suggestions))
     if favorite:
         reasons.append(f"市场最看好：{favorite.label}，2元一注返还 {favorite.payout_if_hit_2:.2f} 元。")
     if best_return:
@@ -380,9 +380,9 @@ def analyze_match(match: MatchInput) -> MatchAnalysis:
     markets = aggregate_score_matrix(matrix)
     enriched_matrix = enrich_score_probabilities(matrix, markets["winner"], match.odds)
     half_time = half_time_probabilities(home_xg, away_xg)
-    recommendation_markets = markets["winner"] + markets["over_under"]
     match_label = f"{match.home.name} vs {match.away.name}"
-    recommendations = build_recommendations(match.match_id, recommendation_markets, match.odds, match.context, match_label)
+    del match_label
+    recommendations: list[PickRecommendation] = []
     decision_comparisons = build_decision_comparisons(match, markets, enriched_matrix, half_time, match.odds)
 
     return MatchAnalysis(
@@ -412,7 +412,7 @@ def collect_best_picks(matches: list[MatchInput]) -> list[PickRecommendation]:
 
 
 def build_parlay_recommendations(matches: list[MatchInput], strategy: StrategyName):
-    return build_parlays(collect_best_picks(matches), strategy=strategy, max_legs=4)
+    return build_odds_parlays(matches, strategy=strategy, max_legs=4)
 
 
 def build_selected_parlay_analysis(
@@ -424,19 +424,11 @@ def build_selected_parlay_analysis(
     selected_set = set(selected_match_ids)
     selected_matches = [match for match in matches if match.match_id in selected_set]
     ordered_matches = sorted(selected_matches, key=lambda match: selected_match_ids.index(match.match_id))
-    analyses = [analyze_match(match) for match in ordered_matches]
-    winner_picks = [
-        pick
-        for analysis in analyses
-        for pick in analysis.recommendations
-        if pick.market == "winner"
-    ]
-
     return SelectedParlayAnalysis(
         selected_match_ids=[match.match_id for match in ordered_matches],
         stake=stake,
-        winner_parlays=build_selected_winner_parlays(winner_picks, strategy=strategy, max_legs=4, stake=stake),
-        score_parlays=build_score_parlays(analyses, strategy=strategy, max_legs=4, stake=stake),
+        winner_parlays=build_odds_parlays(ordered_matches, strategy=strategy, max_legs=4, stake=stake),
+        score_parlays=[],
     )
 
 
