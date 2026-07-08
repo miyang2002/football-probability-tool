@@ -79,6 +79,11 @@ def test_match_analysis_endpoint_returns_visualization_payload():
     winner_decision = next(item for item in payload["decision_comparisons"] if item["market"] == "winner")
     assert winner_decision["model_selection_label"]
     assert winner_decision["advice_label"]
+    assert winner_decision["advice_label"] in {"建议", "小额参考", "谨慎", "放弃"}
+    assert "model_suggestions" in winner_decision
+    assert "market_favorite" in winner_decision
+    assert "best_return" in winner_decision
+    assert "missing_info" in winner_decision
 
 
 def test_parlay_endpoint_supports_strategy_parameter():

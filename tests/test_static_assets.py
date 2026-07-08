@@ -76,15 +76,21 @@ def test_frontend_uses_plain_chinese_analysis_copy():
     app_js = (STATIC / "app.js").read_text()
 
     assert "一句话结论" in html
-    assert "模型依据" in html
+    assert "模型与赔率建议" in html
     assert "模型推荐" in app_js
-    assert "赔率推荐" in app_js
+    assert "市场最看好" in app_js
+    assert "赔率回报最好" in app_js
     assert "综合建议" in app_js
-    assert "赔率是否划算" in app_js
+    assert "2元一注返还" in app_js
+    assert "缺失信息" in app_js
+    assert "赔率是否划算" not in app_js
     assert "最稳一关" in app_js
     assert "2元一注理论盈亏" in app_js
     assert "期望值" not in app_js
     assert ">EV<" not in app_js
+    assert "每100元" not in app_js
+    assert "模型比赔率" not in app_js
+    assert "赔率偏低" not in app_js
 
 
 def test_frontend_contains_official_odds_diagnostics_view():

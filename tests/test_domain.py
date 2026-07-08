@@ -6,6 +6,7 @@ from app.domain import (
     MatchAnalysis,
     MatchContext,
     MatchInput,
+    DecisionOption,
     MarketDecision,
     OfficialMarketDiagnostic,
     OfficialOddsMatchDiagnostic,
@@ -85,6 +86,17 @@ def test_market_decision_accepts_model_and_odds_recommendations():
     decision = MarketDecision(
         market="winner",
         market_label="胜平负",
+        model_suggestions=[
+            DecisionOption(
+                selection="home",
+                label="主胜",
+                probability=0.58,
+                decimal_odds=1.8,
+                payout_if_hit_2=3.6,
+            )
+        ],
+        market_favorite=DecisionOption(selection="home", label="主胜", decimal_odds=1.8, payout_if_hit_2=3.6),
+        best_return=DecisionOption(selection="draw", label="平局", decimal_odds=3.3, payout_if_hit_2=6.6),
         model_selection="home",
         model_selection_label="主胜",
         model_probability=0.58,
@@ -95,7 +107,7 @@ def test_market_decision_accepts_model_and_odds_recommendations():
         edge=0.04,
         expected_value=0.044,
         advice_level="balanced",
-        advice_label="均衡参考",
+        advice_label="小额参考",
         summary="模型和赔率方向一致。",
         reasons=["模型推荐主胜。"],
         warnings=[],
@@ -103,7 +115,10 @@ def test_market_decision_accepts_model_and_odds_recommendations():
 
     assert decision.model_selection_label == "主胜"
     assert decision.odds_selection_label == "主胜"
-    assert decision.advice_label == "均衡参考"
+    assert decision.advice_label == "小额参考"
+    assert decision.model_suggestions[0].payout_if_hit_2 == 3.6
+    assert decision.market_favorite.label == "主胜"
+    assert decision.best_return.label == "平局"
 
 
 def test_context_defaults_are_conservative():

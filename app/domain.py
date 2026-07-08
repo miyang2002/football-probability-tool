@@ -94,9 +94,22 @@ class PickRecommendation(BaseModel):
     plain_summary: str = ""
 
 
+class DecisionOption(BaseModel):
+    selection: str
+    label: str
+    probability: float | None = Field(default=None, ge=0, le=1)
+    decimal_odds: float | None = Field(default=None, gt=1)
+    payout_if_hit_2: float | None = Field(default=None, ge=0)
+    source: str | None = None
+
+
 class MarketDecision(BaseModel):
     market: MarketName
     market_label: str
+    model_suggestions: list[DecisionOption] = Field(default_factory=list)
+    market_favorite: DecisionOption | None = None
+    best_return: DecisionOption | None = None
+    missing_info: list[str] = Field(default_factory=list)
     model_selection: str | None = None
     model_selection_label: str | None = None
     model_probability: float | None = Field(default=None, ge=0, le=1)

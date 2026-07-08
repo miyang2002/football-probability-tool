@@ -473,11 +473,11 @@ p {
 
 .decision-columns {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
-.decision-columns div {
+.decision-columns > div {
   min-width: 0;
   padding: 9px;
   border: 1px solid var(--line);
@@ -497,6 +497,45 @@ p {
   margin: 4px 0;
   font-size: 15px;
   word-break: break-word;
+}
+
+.decision-option-list {
+  display: grid;
+  gap: 6px;
+}
+
+.decision-option-list div {
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.decision-option-list div:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.decision-missing {
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.decision-missing span,
+.decision-missing strong {
+  display: block;
+}
+
+.decision-missing span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.decision-missing strong {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .leg-row strong {

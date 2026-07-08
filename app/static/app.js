@@ -1,4 +1,4 @@
-import { pct, renderBars, renderScatter } from "./charts.js";
+import { pct, renderScatter } from "./charts.js";
 
 const state = {
   matches: [],
@@ -13,13 +13,7 @@ const nodes = {
   feedStatus: document.querySelector("#feed-status"),
   refreshButton: document.querySelector("#refresh-button"),
   recommendationSummary: document.querySelector("#recommendation-summary"),
-  winnerBars: document.querySelector("#winner-bars"),
-  dataQuality: document.querySelector("#data-quality"),
-  scoreBasis: document.querySelector("#score-basis"),
   decisionComparison: document.querySelector("#decision-comparison"),
-  goalsBars: document.querySelector("#goals-bars"),
-  overUnderBars: document.querySelector("#over-under-bars"),
-  halfTimeBars: document.querySelector("#half-time-bars"),
   officialOddsDiagnostics: document.querySelector("#official-odds-diagnostics"),
   parlayScatter: document.querySelector("#parlay-scatter"),
   parlayResults: document.querySelector("#parlay-results"),
@@ -101,11 +95,11 @@ function labelOfficialMarketStatus(status) {
 
 function labelAdviceLevel(level) {
   const labels = {
-    stable: "稳健参考",
-    balanced: "均衡参考",
-    small: "小额尝试",
+    stable: "建议",
+    balanced: "谨慎",
+    small: "小额参考",
     avoid: "放弃",
-    missing: "信息不足",
+    missing: "放弃",
   };
   return labels[level] || level;
 }
@@ -194,32 +188,37 @@ function renderMatches() {
 }
 
 function renderRecommendation(analysis) {
-  const pick = analysis.recommendations[0];
-  if (!pick) {
-    nodes.recommendationSummary.innerHTML = "<p>当前模型不建议强行选择。</p>";
+  const decisions = analysis.decision_comparisons || [];
+  const primary =
+    decisions.find((decision) => decision.advice_label === "建议") ||
+    decisions.find((decision) => decision.advice_label === "小额参考") ||
+    decisions[0];
+  if (!primary) {
+    nodes.recommendationSummary.innerHTML = "<p>当前没有可用建议。</p>";
     return;
   }
-  const warnings = pick.warnings?.length
-    ? `<div class="warning-list">${pick.warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
+  const topModel = primary.model_suggestions?.[0];
+  const warnings = primary.missing_info?.length
+    ? `<div class="warning-list">${primary.missing_info.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
     : "";
-  const reasons = pick.reasons?.length
-    ? `<div class="reason-list">${pick.reasons.slice(0, 3).map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>`
+  const reasons = primary.reasons?.length
+    ? `<div class="reason-list">${primary.reasons.slice(0, 3).map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>`
     : "";
   nodes.recommendationSummary.innerHTML = `
     <div class="pick-summary">
       <div>
-        <span class="subtle">首选倾向</span>
-        <h2>${escapeHtml(labelSelection(pick.selection))}</h2>
+        <span class="subtle">综合优先看</span>
+        <h2>${escapeHtml(primary.market_label)}</h2>
       </div>
-      <span class="value-pill">${escapeHtml(pick.value_label || "没有赔率，无法判断")}</span>
+      <span class="value-pill">${escapeHtml(primary.advice_label || labelAdviceLevel(primary.advice_level))}</span>
     </div>
     <div class="quick-stats">
-      <div><span>模型认为</span><strong>${pct(pick.model_probability)}</strong></div>
-      <div><span>当前赔率</span><strong>${pick.decimal_odds ? Number(pick.decimal_odds).toFixed(2) : "无"}</strong></div>
-      <div><span>赔率是否划算</span><strong>${escapeHtml(pick.value_label || "无法判断")}</strong></div>
-      <div><span>风险</span><strong>${escapeHtml(labelRisk(pick.risk))}</strong></div>
+      <div><span>模型建议</span><strong>${escapeHtml(topModel?.label || "暂无")}</strong></div>
+      <div><span>市场最看好</span><strong>${escapeHtml(primary.market_favorite?.label || "缺官方赔率")}</strong></div>
+      <div><span>赔率回报最好</span><strong>${escapeHtml(primary.best_return?.label || "无法计算")}</strong></div>
+      <div><span>综合建议</span><strong>${escapeHtml(primary.advice_label || labelAdviceLevel(primary.advice_level))}</strong></div>
     </div>
-    <p class="plain-summary">${escapeHtml(pick.plain_summary || "模型暂时没有足够信息给出详细解释。")}</p>
+    <p class="plain-summary">${escapeHtml(primary.summary || "暂无综合说明。")}</p>
     ${reasons}
     ${warnings}
   `;
@@ -227,34 +226,7 @@ function renderRecommendation(analysis) {
 
 function renderAnalysis(analysis) {
   renderRecommendation(analysis);
-  renderBars(
-    nodes.winnerBars,
-    analysis.winner_probabilities.map((item) => ({ label: labelSelection(item.selection), value: item.probability })),
-  );
-  nodes.dataQuality.innerHTML = `
-    <div class="pill">${pct(analysis.data_quality)}</div>
-    <p>数据越高，模型越可信；低于60%需要人工复核。</p>
-  `;
-  nodes.scoreBasis.innerHTML = `
-    <p>${escapeHtml(analysis.score_method_summary)}</p>
-    <p>${escapeHtml(analysis.odds_basis_summary)}</p>
-  `;
   renderDecisionComparison(analysis.decision_comparisons || []);
-  renderBars(
-    nodes.goalsBars,
-    analysis.total_goal_probabilities.map((item) => ({ label: labelSelection(item.selection), value: item.probability })),
-    "var(--blue)",
-  );
-  renderBars(
-    nodes.overUnderBars,
-    analysis.over_under_probabilities.map((item) => ({ label: labelSelection(item.selection), value: item.probability })),
-    "var(--amber)",
-  );
-  renderBars(
-    nodes.halfTimeBars,
-    analysis.half_time_probabilities.map((item) => ({ label: labelSelection(item.selection), value: item.probability })),
-    "var(--blue)",
-  );
 }
 
 function renderDecisionComparison(decisions) {
@@ -275,23 +247,25 @@ function renderDecisionComparison(decisions) {
               <div class="decision-columns">
                 <div>
                   <span>模型推荐</span>
-                  <strong>${escapeHtml(decision.model_selection_label || "暂无")}</strong>
-                  <small>${decision.model_probability == null ? "缺少模型概率" : `模型概率 ${pct(decision.model_probability)}`}</small>
+                  ${renderModelSuggestions(decision.model_suggestions || [])}
                 </div>
                 <div>
-                  <span>赔率推荐</span>
-                  <strong>${escapeHtml(decision.odds_selection_label || "暂无")}</strong>
-                  <small>${
-                    decision.odds_decimal == null
-                      ? "缺少体彩官方赔率"
-                      : `官方赔率 ${Number(decision.odds_decimal).toFixed(2)} · 赔率反推 ${pct(decision.odds_probability || 0)}`
-                  }</small>
+                  <span>市场最看好</span>
+                  ${renderDecisionOption(decision.market_favorite, "缺官方赔率")}
+                </div>
+                <div>
+                  <span>赔率回报最好</span>
+                  ${renderDecisionOption(decision.best_return, "无法计算")}
                 </div>
                 <div>
                   <span>综合建议</span>
                   <strong>${escapeHtml(decision.advice_label || labelAdviceLevel(decision.advice_level))}</strong>
                   <small>${escapeHtml(decision.summary || "")}</small>
                 </div>
+              </div>
+              <div class="decision-missing">
+                <span>缺失信息</span>
+                <strong>${escapeHtml(decision.missing_info?.length ? decision.missing_info.join("；") : "无")}</strong>
               </div>
               ${
                 decision.reasons?.length
@@ -304,6 +278,43 @@ function renderDecisionComparison(decisions) {
                   : ""
               }
             </article>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderPayout(option) {
+  if (!option || option.payout_if_hit_2 == null) return "2元一注返还：无法计算";
+  return `2元一注返还：${Number(option.payout_if_hit_2).toFixed(2)}元`;
+}
+
+function renderDecisionOption(option, fallback) {
+  if (!option) {
+    return `<strong>${escapeHtml(fallback)}</strong><small>2元一注返还：无法计算</small>`;
+  }
+  const probability = option.probability == null ? "" : ` · 概率 ${pct(option.probability)}`;
+  const odds = option.decimal_odds == null ? "" : ` · 赔率 ${Number(option.decimal_odds).toFixed(2)}`;
+  return `
+    <strong>${escapeHtml(option.label)}</strong>
+    <small>${escapeHtml(`${renderPayout(option)}${odds}${probability}`)}</small>
+  `;
+}
+
+function renderModelSuggestions(options) {
+  if (!options?.length) {
+    return '<strong>暂无</strong><small>模型依据不足</small>';
+  }
+  return `
+    <div class="decision-option-list">
+      ${options
+        .map(
+          (option) => `
+            <div>
+              <strong>${escapeHtml(option.label)}</strong>
+              <small>${escapeHtml(`${renderPayout(option)}${option.decimal_odds == null ? "" : ` · 赔率 ${Number(option.decimal_odds).toFixed(2)}`}${option.probability == null ? "" : ` · 概率 ${pct(option.probability)}`}`)}</small>
+            </div>
           `,
         )
         .join("")}
