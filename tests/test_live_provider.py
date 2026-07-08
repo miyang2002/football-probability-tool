@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from app.data.providers import (
     AutoDataProvider,
     SampleDataProvider,
+    SPORTTERY_ENDPOINT,
     SportteryDataProvider,
     TheOddsApiProvider,
     filter_matches_by_window,
@@ -101,6 +102,44 @@ def odds_api_payload() -> list[dict]:
     ]
 
 
+def sporttery_all_markets_payload() -> dict:
+    payload = sporttery_payload()
+    match = payload["value"]["matchInfoList"][0]["subMatchList"][0]
+    match["crs"] = {
+        "s0100": "5.50",
+        "s0201": "9.00",
+        "s0000": "7.00",
+        "updateDate": "2026-07-07",
+        "updateTime": "20:07:51",
+    }
+    match["ttg"] = {
+        "s0": "12.00",
+        "s1": "5.50",
+        "s2": "3.60",
+        "s3": "3.80",
+        "s4": "5.20",
+        "s5": "8.00",
+        "s6": "16.00",
+        "s7": "25.00",
+        "updateDate": "2026-07-07",
+        "updateTime": "20:07:51",
+    }
+    match["hafu"] = {
+        "hh": "2.20",
+        "hd": "13.00",
+        "ha": "35.00",
+        "dh": "4.60",
+        "dd": "6.00",
+        "da": "18.00",
+        "ah": "22.00",
+        "ad": "13.00",
+        "aa": "15.00",
+        "updateDate": "2026-07-07",
+        "updateTime": "20:07:51",
+    }
+    return payload
+
+
 def test_parse_sporttery_payload_builds_matches_and_live_odds_metadata():
     previous = {("sporttery-2040427", "winner", "home"): 1.18}
 
@@ -115,13 +154,42 @@ def test_parse_sporttery_payload_builds_matches_and_live_odds_metadata():
     assert match.away.name == "埃及"
     assert "让球 -1" in match.context.notes
 
-    odds_by_selection = {quote.selection: quote for quote in match.odds}
+    odds_by_selection = {quote.selection: quote for quote in match.odds if quote.market == "winner"}
     assert odds_by_selection["home"].decimal_odds == 1.20
     assert odds_by_selection["home"].previous_decimal_odds == 1.18
     assert odds_by_selection["home"].movement == "up"
     assert odds_by_selection["draw"].movement == "flat"
     assert odds_by_selection["away"].movement == "down"
     assert odds_by_selection["home"].updated_at == "2026-07-07T12:07:51Z"
+
+
+def test_parse_sporttery_payload_builds_all_official_market_odds():
+    matches = parse_sporttery_payload(sporttery_all_markets_payload())
+    match = next(match for match in matches if match.match_id == "sporttery-2040427")
+
+    markets = {quote.market for quote in match.odds}
+    assert {"winner", "handicap_winner", "score", "total_goals", "half_full"}.issubset(markets)
+
+    handicap = next(quote for quote in match.odds if quote.market == "handicap_winner" and quote.selection == "home")
+    assert handicap.selection_label == "让球主胜"
+    assert handicap.decimal_odds == 1.74
+
+    score = next(quote for quote in match.odds if quote.market == "score" and quote.selection == "2-1")
+    assert score.selection_label == "2-1"
+    assert score.decimal_odds == 9.00
+    assert score.raw_selection == "s0201"
+
+    total = next(quote for quote in match.odds if quote.market == "total_goals" and quote.selection == "3")
+    assert total.selection_label == "3球"
+    assert total.decimal_odds == 3.80
+
+    half_full = next(quote for quote in match.odds if quote.market == "half_full" and quote.selection == "home_home")
+    assert half_full.selection_label == "胜胜"
+    assert half_full.decimal_odds == 2.20
+
+
+def test_sporttery_endpoint_requests_all_official_pool_codes():
+    assert "poolCode=had,hhad,crs,ttg,hafu" in SPORTTERY_ENDPOINT
 
 
 def test_filter_matches_by_window_keeps_only_upcoming_next_match_day():
@@ -206,7 +274,12 @@ def test_parse_odds_api_payload_builds_matches_and_live_odds_metadata():
 
 
 def test_the_odds_api_provider_returns_live_matches_from_injected_fetcher():
-    provider = TheOddsApiProvider(fetch_json=odds_api_payload, api_key="test-key")
+    current = datetime(2026, 7, 7, 20, 30, tzinfo=SHANGHAI)
+
+    def now():
+        return current.astimezone(timezone.utc)
+
+    provider = TheOddsApiProvider(fetch_json=odds_api_payload, now=now, api_key="test-key")
 
     matches = provider.list_matches(window="7d")
 
@@ -219,8 +292,13 @@ def test_auto_provider_uses_odds_api_when_sporttery_is_blocked():
     def blocked_sporttery():
         raise RuntimeError("HTTP Error 567: Unknown Status")
 
-    sporttery = SportteryDataProvider(fetch_json=blocked_sporttery, refresh_seconds=1)
-    odds_api = TheOddsApiProvider(fetch_json=odds_api_payload, api_key="test-key", refresh_seconds=1)
+    current = datetime(2026, 7, 7, 20, 30, tzinfo=SHANGHAI)
+
+    def now():
+        return current.astimezone(timezone.utc)
+
+    sporttery = SportteryDataProvider(fetch_json=blocked_sporttery, now=now, refresh_seconds=1)
+    odds_api = TheOddsApiProvider(fetch_json=odds_api_payload, now=now, api_key="test-key", refresh_seconds=1)
     provider = AutoDataProvider(live_providers=[sporttery, odds_api], fallback_provider=SampleDataProvider())
 
     matches = provider.list_matches(window="7d")

@@ -12,9 +12,9 @@ from app.domain import MatchContext, MatchInput, OddsMovement, OddsQuote, Source
 
 SPORTTERY_ENDPOINT = (
     "https://webapi.sporttery.cn/gateway/uniform/football/getMatchCalculatorV1.qry"
-    "?channel=c&poolCode=had,hhad"
+    "?channel=c&poolCode=had,hhad,crs,ttg,hafu"
 )
-SPORTTERY_REFERER = "https://www.sporttery.cn/jc/jsq/zqspf/"
+SPORTTERY_REFERER = "https://m.sporttery.cn/mjc/jsq/zqspf/"
 ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4/sports"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 MatchWindow = str
@@ -124,6 +124,47 @@ def team_rating_from_odds(own_odds: float | None, opponent_odds: float | None) -
     return attack, defense
 
 
+WINNER_LABELS = {"home": "主胜", "draw": "平局", "away": "客胜"}
+HANDICAP_LABELS = {"home": "让球主胜", "draw": "让球平", "away": "让球客胜"}
+HALF_FULL_SELECTIONS = {
+    "hh": ("home_home", "胜胜"),
+    "hd": ("home_draw", "胜平"),
+    "ha": ("home_away", "胜负"),
+    "dh": ("draw_home", "平胜"),
+    "dd": ("draw_draw", "平平"),
+    "da": ("draw_away", "平负"),
+    "ah": ("away_home", "负胜"),
+    "ad": ("away_draw", "负平"),
+    "aa": ("away_away", "负负"),
+}
+
+
+def build_market_quote(
+    match_id: str,
+    market: str,
+    selection: str,
+    label: str,
+    raw_selection: str,
+    decimal_odds: float,
+    updated_at: str | None,
+    previous_odds: dict[tuple[str, str, str], float],
+    movement_flag: Any = None,
+) -> OddsQuote:
+    previous = previous_odds.get((match_id, market, selection))
+    fallback_movement = movement_from_flag(movement_flag)
+    return OddsQuote(
+        market=market,
+        selection=selection,
+        selection_label=label,
+        raw_selection=raw_selection,
+        decimal_odds=decimal_odds,
+        source="sporttery",
+        updated_at=updated_at,
+        previous_decimal_odds=previous,
+        movement=movement_from_previous(decimal_odds, previous, fallback_movement),
+    )
+
+
 def build_winner_odds(
     match_id: str,
     had: dict[str, Any],
@@ -137,17 +178,149 @@ def build_winner_odds(
         decimal_odds = parse_decimal(had.get(value_key))
         if decimal_odds is None:
             continue
-        previous = previous_odds.get((match_id, "winner", selection))
-        fallback_movement = movement_from_flag(had.get(flag_key))
         quotes.append(
-            OddsQuote(
-                market="winner",
-                selection=selection,
-                decimal_odds=decimal_odds,
-                source="sporttery",
-                updated_at=updated,
-                previous_decimal_odds=previous,
-                movement=movement_from_previous(decimal_odds, previous, fallback_movement),
+            build_market_quote(
+                match_id,
+                "winner",
+                selection,
+                WINNER_LABELS[selection],
+                value_key,
+                decimal_odds,
+                updated,
+                previous_odds,
+                had.get(flag_key),
+            )
+        )
+
+    return quotes
+
+
+def build_handicap_winner_odds(
+    match_id: str,
+    hhad: dict[str, Any],
+    previous_odds: dict[tuple[str, str, str], float],
+) -> list[OddsQuote]:
+    mapping = {"home": ("h", "hf"), "draw": ("d", "df"), "away": ("a", "af")}
+    updated = odds_updated_at(hhad)
+    quotes: list[OddsQuote] = []
+
+    for selection, (value_key, flag_key) in mapping.items():
+        decimal_odds = parse_decimal(hhad.get(value_key))
+        if decimal_odds is None:
+            continue
+        quotes.append(
+            build_market_quote(
+                match_id,
+                "handicap_winner",
+                selection,
+                HANDICAP_LABELS[selection],
+                value_key,
+                decimal_odds,
+                updated,
+                previous_odds,
+                hhad.get(flag_key),
+            )
+        )
+
+    return quotes
+
+
+def score_selection_from_key(raw_key: str) -> tuple[str, str] | None:
+    digits = raw_key.removeprefix("s")
+    if len(digits) != 4 or not digits.isdigit():
+        return None
+    home_goals = int(digits[:2])
+    away_goals = int(digits[2:])
+    label = f"{home_goals}-{away_goals}"
+    return label, label
+
+
+def build_score_odds(
+    match_id: str,
+    crs: dict[str, Any],
+    previous_odds: dict[tuple[str, str, str], float],
+) -> list[OddsQuote]:
+    updated = odds_updated_at(crs)
+    quotes: list[OddsQuote] = []
+
+    for raw_key, raw_value in crs.items():
+        parsed = score_selection_from_key(str(raw_key))
+        decimal_odds = parse_decimal(raw_value)
+        if parsed is None or decimal_odds is None:
+            continue
+        selection, label = parsed
+        quotes.append(
+            build_market_quote(
+                match_id,
+                "score",
+                selection,
+                label,
+                str(raw_key),
+                decimal_odds,
+                updated,
+                previous_odds,
+                crs.get(f"{raw_key}f"),
+            )
+        )
+
+    return quotes
+
+
+def build_total_goals_odds(
+    match_id: str,
+    ttg: dict[str, Any],
+    previous_odds: dict[tuple[str, str, str], float],
+) -> list[OddsQuote]:
+    updated = odds_updated_at(ttg)
+    quotes: list[OddsQuote] = []
+
+    for total in range(8):
+        raw_key = f"s{total}"
+        decimal_odds = parse_decimal(ttg.get(raw_key))
+        if decimal_odds is None:
+            continue
+        selection = str(total)
+        label = f"{total}球" if total < 7 else "7+球"
+        quotes.append(
+            build_market_quote(
+                match_id,
+                "total_goals",
+                selection,
+                label,
+                raw_key,
+                decimal_odds,
+                updated,
+                previous_odds,
+                ttg.get(f"{raw_key}f"),
+            )
+        )
+
+    return quotes
+
+
+def build_half_full_odds(
+    match_id: str,
+    hafu: dict[str, Any],
+    previous_odds: dict[tuple[str, str, str], float],
+) -> list[OddsQuote]:
+    updated = odds_updated_at(hafu)
+    quotes: list[OddsQuote] = []
+
+    for raw_key, (selection, label) in HALF_FULL_SELECTIONS.items():
+        decimal_odds = parse_decimal(hafu.get(raw_key))
+        if decimal_odds is None:
+            continue
+        quotes.append(
+            build_market_quote(
+                match_id,
+                "half_full",
+                selection,
+                label,
+                raw_key,
+                decimal_odds,
+                updated,
+                previous_odds,
+                hafu.get(f"{raw_key}f"),
             )
         )
 
@@ -246,9 +419,15 @@ def parse_sporttery_payload(
         match_id = f"sporttery-{item.get('matchId')}"
         had = item.get("had") or {}
         hhad = item.get("hhad") or {}
-        odds = build_winner_odds(match_id, had, previous)
-        home_odds = next((quote.decimal_odds for quote in odds if quote.selection == "home"), None)
-        away_odds = next((quote.decimal_odds for quote in odds if quote.selection == "away"), None)
+        winner_odds = build_winner_odds(match_id, had, previous)
+        odds = []
+        odds.extend(winner_odds)
+        odds.extend(build_handicap_winner_odds(match_id, hhad, previous))
+        odds.extend(build_score_odds(match_id, item.get("crs") or {}, previous))
+        odds.extend(build_total_goals_odds(match_id, item.get("ttg") or {}, previous))
+        odds.extend(build_half_full_odds(match_id, item.get("hafu") or {}, previous))
+        home_odds = next((quote.decimal_odds for quote in winner_odds if quote.selection == "home"), None)
+        away_odds = next((quote.decimal_odds for quote in winner_odds if quote.selection == "away"), None)
         home_attack, home_defense = team_rating_from_odds(home_odds, away_odds)
         away_attack, away_defense = team_rating_from_odds(away_odds, home_odds)
 
