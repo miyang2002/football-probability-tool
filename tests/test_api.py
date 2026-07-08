@@ -86,6 +86,21 @@ def test_match_analysis_endpoint_returns_visualization_payload():
     assert "missing_info" in winner_decision
 
 
+def test_match_analysis_endpoint_returns_two_model_advice_and_score_candidates():
+    payload = get_json("/api/matches/wc-001/analysis")
+    score = next(item for item in payload["decision_comparisons"] if item["market"] == "score")
+
+    assert "official_model" in score
+    assert "team_model" in score
+    assert "combined_model" in score
+    assert "model_weights" in score
+    assert "official" in score["model_weights"]
+    assert "team" in score["model_weights"]
+    assert isinstance(score["score_candidates"], list)
+    assert "summary" in score
+    assert "球队近况未抓到" in score["missing_info"]
+
+
 def test_parlay_endpoint_supports_strategy_parameter():
     payload = get_json("/api/parlays?strategy=balanced")
 
