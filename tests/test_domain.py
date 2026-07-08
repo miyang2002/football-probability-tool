@@ -2,12 +2,14 @@ import pytest
 from pydantic import ValidationError
 
 from app.domain import (
+    ModelAdviceLine,
     MarketProbability,
     MatchAnalysis,
     MatchContext,
     MatchInput,
     DecisionOption,
     MarketDecision,
+    ModelWeights,
     OfficialMarketDiagnostic,
     OfficialOddsMatchDiagnostic,
     OddsQuote,
@@ -15,7 +17,10 @@ from app.domain import (
     ParlayRecommendation,
     PickRecommendation,
     ScoreProbability,
+    ScoreCandidate,
     SourceStatus,
+    TeamInfoFact,
+    TeamInfoSnapshot,
     TeamInput,
 )
 
@@ -490,3 +495,86 @@ def test_source_status_serializes_refresh_state():
     assert payload["source"] == "sporttery"
     assert payload["healthy"] is True
     assert payload["refresh_seconds"] == 30
+
+
+def test_market_decision_accepts_two_model_plain_advice_fields():
+    official = ModelAdviceLine(
+        source="official_odds",
+        label="体彩更看好主胜",
+        selection="home",
+        selection_label="主胜",
+        probability=0.62,
+        decimal_odds=1.45,
+        payout_if_hit_2=2.9,
+        confidence_label="中",
+        rank=1,
+        reasons=["体彩胜平负里主胜赔率最低。"],
+    )
+    team = ModelAdviceLine(
+        source="team_info",
+        label="球队资料偏向主胜",
+        selection="home",
+        selection_label="主胜",
+        probability=0.58,
+        confidence_label="低",
+        rank=1,
+        reasons=["球队资料不足，主要参考近期进失球。"],
+    )
+    score_candidate = ScoreCandidate(
+        selection="home_other",
+        label="胜其它",
+        model_scoreline="4-1",
+        official_option_label="胜其它",
+        official_probability=0.03,
+        team_probability=0.02,
+        combined_probability=0.025,
+        decimal_odds=35.0,
+        payout_if_hit_2=70.0,
+        confidence_label="低",
+        rank=5,
+        support_items=["胜平负支持主胜"],
+        conflict_items=[],
+        reason="模型比分4-1在体彩中归入胜其它。",
+        grouped_scorelines=["4-1", "5-0"],
+    )
+    decision = MarketDecision(
+        market="score",
+        market_label="比分",
+        official_model=official,
+        team_model=team,
+        combined_model=official,
+        model_weights=ModelWeights(official=0.75, team=0.25),
+        score_candidates=[score_candidate],
+        missing_info=["伤停信息缺失"],
+        advice_level="small",
+        advice_label="小额参考",
+        summary="综合方案：优先参考主胜方向比分，胜其它仅作娱乐参考。",
+    )
+
+    assert decision.official_model.selection_label == "主胜"
+    assert decision.team_model.confidence_label == "低"
+    assert decision.model_weights.official == 0.75
+    assert decision.score_candidates[0].official_option_label == "胜其它"
+    assert decision.score_candidates[0].payout_if_hit_2 == 70.0
+
+
+def test_team_info_snapshot_exposes_missing_sources():
+    snapshot = TeamInfoSnapshot(
+        match_id="m1",
+        facts=[
+            TeamInfoFact(
+                category="recent_form",
+                team="home",
+                title="近况未抓到",
+                summary="未找到可用近况数据。",
+                source_name="system",
+                confidence=0.0,
+                affects_model=False,
+            )
+        ],
+        quality=0.0,
+        missing_info=["球队近况未抓到", "伤停信息缺失"],
+    )
+
+    assert snapshot.missing_info == ["球队近况未抓到", "伤停信息缺失"]
+    assert snapshot.facts[0].affects_model is False

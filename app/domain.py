@@ -103,9 +103,70 @@ class DecisionOption(BaseModel):
     source: str | None = None
 
 
+class ModelAdviceLine(BaseModel):
+    source: Literal["official_odds", "team_info", "combined"]
+    label: str
+    selection: str | None = None
+    selection_label: str | None = None
+    probability: float | None = Field(default=None, ge=0, le=1)
+    decimal_odds: float | None = Field(default=None, gt=1)
+    payout_if_hit_2: float | None = Field(default=None, ge=0)
+    confidence_label: str = "低"
+    rank: int | None = Field(default=None, ge=1)
+    reasons: list[str] = Field(default_factory=list)
+
+
+class ModelWeights(BaseModel):
+    official: float = Field(ge=0, le=1)
+    team: float = Field(ge=0, le=1)
+
+
+class ScoreCandidate(BaseModel):
+    selection: str
+    label: str
+    model_scoreline: str | None = None
+    official_option_label: str | None = None
+    official_probability: float | None = Field(default=None, ge=0, le=1)
+    team_probability: float | None = Field(default=None, ge=0, le=1)
+    combined_probability: float | None = Field(default=None, ge=0, le=1)
+    decimal_odds: float | None = Field(default=None, gt=1)
+    payout_if_hit_2: float | None = Field(default=None, ge=0)
+    confidence_label: str = "低"
+    rank: int = Field(ge=1)
+    support_items: list[str] = Field(default_factory=list)
+    conflict_items: list[str] = Field(default_factory=list)
+    reason: str
+    grouped_scorelines: list[str] = Field(default_factory=list)
+
+
+class TeamInfoFact(BaseModel):
+    category: Literal["recent_form", "injury", "motivation", "news", "schedule"]
+    team: Literal["home", "away", "match"]
+    title: str
+    summary: str
+    source_name: str
+    source_url: str | None = None
+    updated_at: str | None = None
+    confidence: float = Field(ge=0, le=1)
+    affects_model: bool = False
+
+
+class TeamInfoSnapshot(BaseModel):
+    match_id: str
+    facts: list[TeamInfoFact] = Field(default_factory=list)
+    quality: float = Field(ge=0, le=1)
+    missing_info: list[str] = Field(default_factory=list)
+    updated_at: str | None = None
+
+
 class MarketDecision(BaseModel):
     market: MarketName
     market_label: str
+    official_model: ModelAdviceLine | None = None
+    team_model: ModelAdviceLine | None = None
+    combined_model: ModelAdviceLine | None = None
+    model_weights: ModelWeights | None = None
+    score_candidates: list[ScoreCandidate] = Field(default_factory=list)
     model_suggestions: list[DecisionOption] = Field(default_factory=list)
     market_favorite: DecisionOption | None = None
     best_return: DecisionOption | None = None
