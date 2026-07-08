@@ -192,6 +192,27 @@ def test_sporttery_endpoint_requests_all_official_pool_codes():
     assert "poolCode=had,hhad,crs,ttg,hafu" in SPORTTERY_ENDPOINT
 
 
+def test_sporttery_provider_diagnostics_reports_market_coverage():
+    current = datetime(2026, 7, 7, 20, 30, tzinfo=SHANGHAI)
+
+    def now():
+        return current.astimezone(timezone.utc)
+
+    provider = SportteryDataProvider(fetch_json=sporttery_all_markets_payload, now=now, refresh_seconds=1)
+
+    diagnostics = provider.official_odds_diagnostics(window="7d")
+    match = next(item for item in diagnostics.matches if item.match_id == "sporttery-2040427")
+    markets = {market.market: market for market in match.markets}
+
+    assert diagnostics.match_count >= 1
+    assert markets["winner"].status == "available"
+    assert markets["handicap_winner"].status == "available"
+    assert markets["score"].status == "available"
+    assert markets["total_goals"].status == "available"
+    assert markets["half_full"].status == "available"
+    assert markets["score"].odds_count >= 3
+
+
 def test_filter_matches_by_window_keeps_only_upcoming_next_match_day():
     matches = parse_sporttery_payload(sporttery_payload())
     now = datetime(2026, 7, 7, 20, 30, tzinfo=SHANGHAI)

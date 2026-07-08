@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.data.providers import MatchProvider, build_provider
 from app.data.repository import PredictionRepository
 from app.domain import MatchInput, StrategyName
-from app.services import analysis_payload, analyze_match, build_parlay_recommendations, build_selected_parlay_analysis
+from app.services import (
+    analysis_payload,
+    analyze_match,
+    build_official_odds_diagnostics,
+    build_parlay_recommendations,
+    build_selected_parlay_analysis,
+)
 
 
 router = APIRouter()
@@ -37,6 +43,11 @@ async def list_matches(window: str = Query(default="next"), provider: MatchProvi
 @router.get("/api/feed/status")
 async def feed_status(provider: MatchProvider = Depends(get_provider)):
     return provider.status()
+
+
+@router.get("/api/official-odds/diagnostics")
+async def official_odds_diagnostics(window: str = Query(default="next"), provider: MatchProvider = Depends(get_provider)):
+    return build_official_odds_diagnostics(provider, window=window)
 
 
 @router.get("/api/matches/{match_id}/analysis")

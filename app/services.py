@@ -1,4 +1,14 @@
-from app.domain import MatchAnalysis, MatchInput, OddsQuote, PickRecommendation, ScoreProbability, SelectedParlayAnalysis, StrategyName
+from app.data.providers import build_match_official_diagnostic
+from app.domain import (
+    MatchAnalysis,
+    MatchInput,
+    OddsQuote,
+    OfficialOddsDiagnostics,
+    PickRecommendation,
+    ScoreProbability,
+    SelectedParlayAnalysis,
+    StrategyName,
+)
 from app.model.odds import expected_value, implied_probability
 from app.model.parlay import build_parlays, build_score_parlays, build_selected_winner_parlays
 from app.model.recommendations import build_recommendations, price_value_label
@@ -146,3 +156,12 @@ def build_selected_parlay_analysis(
 
 def analysis_payload(match: MatchInput) -> dict:
     return analyze_match(match).model_dump()
+
+
+def build_official_odds_diagnostics(provider, window: str = "next") -> OfficialOddsDiagnostics:
+    if hasattr(provider, "official_odds_diagnostics"):
+        return provider.official_odds_diagnostics(window=window)
+
+    matches = provider.list_matches(window=window)
+    diagnostics = [build_match_official_diagnostic(match) for match in matches]
+    return OfficialOddsDiagnostics(status=provider.status(), match_count=len(diagnostics), matches=diagnostics)

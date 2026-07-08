@@ -7,7 +7,17 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from app.data.sample_data import build_sample_matches
-from app.domain import MatchContext, MatchInput, OddsMovement, OddsQuote, SourceStatus, TeamInput
+from app.domain import (
+    MatchContext,
+    MatchInput,
+    OddsMovement,
+    OddsQuote,
+    OfficialMarketDiagnostic,
+    OfficialOddsDiagnostics,
+    OfficialOddsMatchDiagnostic,
+    SourceStatus,
+    TeamInput,
+)
 
 
 SPORTTERY_ENDPOINT = (
@@ -137,6 +147,13 @@ HALF_FULL_SELECTIONS = {
     "ad": ("away_draw", "负平"),
     "aa": ("away_away", "负负"),
 }
+OFFICIAL_MARKETS = [
+    ("winner", "胜平负"),
+    ("handicap_winner", "让球胜平负"),
+    ("score", "比分"),
+    ("total_goals", "总进球"),
+    ("half_full", "半全场"),
+]
 
 
 def build_market_quote(
@@ -325,6 +342,33 @@ def build_half_full_odds(
         )
 
     return quotes
+
+
+def build_match_official_diagnostic(match: MatchInput) -> OfficialOddsMatchDiagnostic:
+    markets: list[OfficialMarketDiagnostic] = []
+    for market_name, label in OFFICIAL_MARKETS:
+        odds = [quote for quote in match.odds if quote.market == market_name and quote.source == "sporttery"]
+        status = "available" if odds else "missing"
+        warnings = [] if odds else [f"官方{label}赔率缺失"]
+        markets.append(
+            OfficialMarketDiagnostic(
+                market=market_name,
+                label=label,
+                status=status,
+                odds_count=len(odds),
+                odds=odds,
+                warnings=warnings,
+            )
+        )
+
+    return OfficialOddsMatchDiagnostic(
+        match_id=match.match_id,
+        home_name=match.home.name,
+        away_name=match.away.name,
+        kickoff_utc=match.kickoff_utc,
+        competition=match.competition,
+        markets=markets,
+    )
 
 
 def find_h2h_market(bookmaker: dict[str, Any]) -> dict[str, Any] | None:
@@ -579,6 +623,11 @@ class SportteryDataProvider:
 
         self._using_fallback = True
         return self._fallback_provider.list_matches(window)
+
+    def official_odds_diagnostics(self, window: MatchWindow = "next") -> OfficialOddsDiagnostics:
+        matches = self.list_matches(window=window)
+        diagnostics = [build_match_official_diagnostic(match) for match in matches]
+        return OfficialOddsDiagnostics(status=self.status(), match_count=len(diagnostics), matches=diagnostics)
 
     def get_match(self, match_id: str) -> MatchInput | None:
         self._refresh_if_needed()

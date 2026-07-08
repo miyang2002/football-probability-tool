@@ -52,6 +52,20 @@ def test_feed_status_endpoint_returns_provider_state():
     assert payload["refresh_seconds"] == 30
 
 
+def test_official_odds_diagnostics_endpoint_returns_market_coverage():
+    payload = get_json("/api/official-odds/diagnostics?window=7d")
+
+    assert payload["status"]["source"]
+    assert payload["match_count"] >= 1
+    match = payload["matches"][0]
+    assert "match_id" in match
+    assert "markets" in match
+    market_names = {market["market"] for market in match["markets"]}
+    market_statuses = {market["market"]: market["status"] for market in match["markets"]}
+    assert {"winner", "handicap_winner", "score", "total_goals", "half_full"}.issubset(market_names)
+    assert market_statuses["winner"] == "missing"
+
+
 def test_match_analysis_endpoint_returns_visualization_payload():
     payload = get_json("/api/matches/wc-001/analysis")
 
