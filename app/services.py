@@ -15,6 +15,7 @@ from app.domain import (
     StrategyName,
 )
 from app.model.odds import expected_value, implied_probability
+from app.model.combined_advice import build_market_decisions
 from app.model.parlay import build_parlays, build_score_parlays, build_selected_winner_parlays
 from app.model.recommendations import build_recommendations, market_label, price_value_label, selection_label
 from app.model.score_model import (
@@ -370,16 +371,7 @@ def build_decision_comparisons(
         "total_goals": total_goal_probabilities(scores),
         "half_full": half_full_probabilities(half_time, markets["winner"]),
     }
-    decisions: list[MarketDecision] = []
-    for market in DECISION_MARKETS:
-        quotes = official_market_quotes(odds, market)
-        limit = 3 if market == "score" else 1
-        model_suggestions = sorted_model_options(market, model_probabilities[market], quotes, limit=limit)
-        missing_info = []
-        if market == "handicap_winner" and not model_probabilities[market]:
-            missing_info.append("缺少让球数，无法计算让球胜平负模型建议")
-        decisions.append(build_decision_summary(market, model_suggestions, model_probabilities[market], quotes, missing_info))
-    return decisions
+    return build_market_decisions(match, model_probabilities, scores)
 
 
 def analyze_match(match: MatchInput) -> MatchAnalysis:

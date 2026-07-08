@@ -69,7 +69,7 @@ def test_analysis_builds_five_plain_market_decisions_with_payouts():
     decisions = {decision.market: decision for decision in analysis.decision_comparisons}
 
     assert set(decisions) == {"winner", "handicap_winner", "score", "total_goals", "half_full"}
-    assert all(decision.advice_label in {"建议", "小额参考", "谨慎", "放弃"} for decision in decisions.values())
+    assert all(decision.advice_label in {"建议", "小额参考", "谨慎", "放弃", "仅作娱乐参考"} for decision in decisions.values())
     assert decisions["winner"].model_suggestions
     assert decisions["handicap_winner"].model_suggestions
     assert decisions["score"].model_suggestions
@@ -78,4 +78,81 @@ def test_analysis_builds_five_plain_market_decisions_with_payouts():
     assert decisions["half_full"].model_suggestions
     assert decisions["score"].market_favorite.payout_if_hit_2 == 11.6
     assert decisions["score"].best_return.payout_if_hit_2 is not None
-    assert decisions["winner"].missing_info == []
+    assert "官方胜平负赔率缺失" not in decisions["winner"].missing_info
+    assert "球队近况未抓到" in decisions["winner"].missing_info
+
+
+def test_analysis_returns_two_model_fields_and_score_candidates():
+    match = MatchInput(
+        match_id="m-score",
+        competition="世界杯",
+        kickoff_utc="2026-07-10T04:00:00Z",
+        home=TeamInput(name="法国", attack_rating=1.18, defense_rating=0.92),
+        away=TeamInput(name="摩洛哥", attack_rating=0.91, defense_rating=1.05),
+        context=MatchContext(data_quality=0.80, notes=["让球 -1"]),
+        odds=[
+            OddsQuote(market="winner", selection="home", decimal_odds=1.40, source="sporttery", selection_label="主胜"),
+            OddsQuote(market="winner", selection="draw", decimal_odds=3.85, source="sporttery", selection_label="平局"),
+            OddsQuote(market="winner", selection="away", decimal_odds=6.45, source="sporttery", selection_label="客胜"),
+            OddsQuote(market="handicap_winner", selection="home", decimal_odds=2.55, source="sporttery", selection_label="让球主胜"),
+            OddsQuote(market="handicap_winner", selection="draw", decimal_odds=3.35, source="sporttery", selection_label="让球平"),
+            OddsQuote(market="handicap_winner", selection="away", decimal_odds=2.30, source="sporttery", selection_label="让球客胜"),
+            OddsQuote(market="score", selection="1-0", decimal_odds=6.5, source="sporttery", selection_label="1-0"),
+            OddsQuote(market="score", selection="2-0", decimal_odds=6.25, source="sporttery", selection_label="2-0"),
+            OddsQuote(market="score", selection="home_other", decimal_odds=35.0, source="sporttery", selection_label="胜其它"),
+            OddsQuote(market="score", selection="draw_other", decimal_odds=120.0, source="sporttery", selection_label="平其它"),
+            OddsQuote(market="score", selection="away_other", decimal_odds=80.0, source="sporttery", selection_label="负其它"),
+            OddsQuote(market="total_goals", selection="1", decimal_odds=4.20, source="sporttery", selection_label="1球"),
+            OddsQuote(market="total_goals", selection="2", decimal_odds=3.20, source="sporttery", selection_label="2球"),
+            OddsQuote(market="total_goals", selection="3", decimal_odds=3.80, source="sporttery", selection_label="3球"),
+            OddsQuote(market="half_full", selection="home_home", decimal_odds=2.40, source="sporttery", selection_label="胜胜"),
+            OddsQuote(market="half_full", selection="draw_home", decimal_odds=4.40, source="sporttery", selection_label="平胜"),
+        ],
+    )
+
+    analysis = analyze_match(match)
+    decisions = {decision.market: decision for decision in analysis.decision_comparisons}
+    score_decision = decisions["score"]
+
+    assert score_decision.official_model is not None
+    assert score_decision.team_model is not None
+    assert score_decision.combined_model is not None
+    assert score_decision.model_weights is not None
+    assert score_decision.score_candidates
+    assert any(candidate.selection == "home_other" for candidate in score_decision.score_candidates)
+    assert "球队近况未抓到" in score_decision.missing_info
+    assert "2元" in score_decision.summary
+
+
+def test_different_score_odds_produce_different_official_score_recommendations():
+    base = MatchInput(
+        match_id="m-a",
+        competition="世界杯",
+        kickoff_utc="2026-07-10T04:00:00Z",
+        home=TeamInput(name="A", attack_rating=1.0, defense_rating=1.0),
+        away=TeamInput(name="B", attack_rating=1.0, defense_rating=1.0),
+        context=MatchContext(notes=["让球 0"]),
+        odds=[
+            OddsQuote(market="winner", selection="home", decimal_odds=2.2, source="sporttery", selection_label="主胜"),
+            OddsQuote(market="winner", selection="draw", decimal_odds=3.0, source="sporttery", selection_label="平局"),
+            OddsQuote(market="winner", selection="away", decimal_odds=3.1, source="sporttery", selection_label="客胜"),
+            OddsQuote(market="score", selection="1-0", decimal_odds=5.0, source="sporttery", selection_label="1-0"),
+            OddsQuote(market="score", selection="2-1", decimal_odds=9.0, source="sporttery", selection_label="2-1"),
+            OddsQuote(market="score", selection="draw_other", decimal_odds=100.0, source="sporttery", selection_label="平其它"),
+        ],
+    )
+    changed = base.model_copy(
+        update={
+            "match_id": "m-b",
+            "odds": [
+                quote.model_copy(update={"decimal_odds": 4.5}) if quote.market == "score" and quote.selection == "2-1" else quote
+                for quote in base.odds
+            ],
+        }
+    )
+
+    first_score = next(decision for decision in analyze_match(base).decision_comparisons if decision.market == "score")
+    second_score = next(decision for decision in analyze_match(changed).decision_comparisons if decision.market == "score")
+
+    assert first_score.official_model.selection == "1-0"
+    assert second_score.official_model.selection == "2-1"
