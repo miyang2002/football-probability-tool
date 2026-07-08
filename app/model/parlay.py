@@ -61,7 +61,8 @@ def parlay_value_label(expected_value: float) -> str:
 
 
 def probability_label(probability: float) -> str:
-    return f"赔率折算参考 {probability:.1%}"
+    del probability
+    return "真实赔率参考"
 
 
 def leg_display_label(pick: PickRecommendation) -> str:
@@ -206,27 +207,13 @@ def build_parlay_reasons(
     strategy: StrategyName,
     stake: float = 100.0,
 ) -> tuple[str | None, str | None, list[str], list[str]]:
-    strongest = max(legs, key=lambda leg: leg.probability, default=None)
-    weakest = min(legs, key=lambda leg: leg.probability, default=None)
-    strongest_label = strongest.label if strongest else None
-    weakest_label = weakest.label if weakest else None
+    del combined_probability
     del expected_value
     reasons = [
-        f"{STRATEGY_LABELS[strategy]}方案只按体彩真实赔率计算。",
+        f"{STRATEGY_LABELS[strategy]}方案按体彩真实赔率计算。",
         f"组合总赔率 {combined_odds:.2f}，{stake:g}元一注中出返还约 {combined_odds * stake:.2f} 元。",
-        f"赔率折算参考约 {combined_probability:.1%}，这个数只来自赔率高低，不代表比赛一定会这样踢。",
     ]
-    warnings: list[str] = []
-    if strongest:
-        reasons.append(f"相对稳的一关：{strongest.label}，赔率折算参考 {strongest.probability:.1%}。")
-    if weakest:
-        reasons.append(f"风险最高的一关：{weakest.label}，赔率折算参考 {weakest.probability:.1%}，需要重点复核。")
-    if any(leg.risk == "high" for leg in legs):
-        warnings.append("组合里有风险偏高的单关，不适合重仓。")
-    if len(legs) >= 4:
-        warnings.append("串关场次越多，命中率下降越快。")
-
-    return strongest_label, weakest_label, reasons, warnings
+    return None, None, reasons, []
 
 
 def parlay_from_legs(
@@ -327,9 +314,10 @@ def build_parlays(
             combined_odds,
             ev,
             strategy,
+            2.0,
         )
         explanation = (
-            f"{STRATEGY_LABELS[strategy]} {leg_count}串1：赔率折算参考 {combined_probability:.1%}，"
+            f"{STRATEGY_LABELS[strategy]} {leg_count}串1："
             f"总赔率 {combined_odds:.2f}，{parlay_value_label(ev)}。"
         )
         results.append(
@@ -406,7 +394,7 @@ def build_selected_winner_parlays(
                     strategy=strategy,
                     value_label=parlay_value_label(ev),
                     explanation=(
-                        f"真实胜平负赔率 {leg_count}串1：赔率折算参考 {combined_probability:.1%}，"
+                        f"真实胜平负赔率 {leg_count}串1："
                         f"2元一注中出返还约 {combined_odds * stake:.1f} 元。"
                     ),
                     stake=stake,

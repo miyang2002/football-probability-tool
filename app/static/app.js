@@ -1,5 +1,3 @@
-import { pct, renderScatter } from "./charts.js";
-
 const state = {
   matches: [],
   selectedMatchId: null,
@@ -11,10 +9,7 @@ const nodes = {
   matchList: document.querySelector("#match-list"),
   feedStatus: document.querySelector("#feed-status"),
   refreshButton: document.querySelector("#refresh-button"),
-  recommendationSummary: document.querySelector("#recommendation-summary"),
   decisionComparison: document.querySelector("#decision-comparison"),
-  officialOddsDiagnostics: document.querySelector("#official-odds-diagnostics"),
-  parlayScatter: document.querySelector("#parlay-scatter"),
   parlayResults: document.querySelector("#parlay-results"),
 };
 
@@ -39,26 +34,14 @@ async function fetchJson(url) {
   return response.json();
 }
 
-function labelSelection(selection) {
-  const labels = {
-    home: "主胜",
-    draw: "平局",
-    away: "客胜",
-  };
-  if (labels[selection]) return labels[selection];
-  if (selection.startsWith("over_")) return `大于 ${selection.replace("over_", "")} 球`;
-  if (selection.startsWith("under_")) return `小于 ${selection.replace("under_", "")} 球`;
-  if (selection === "5+") return "5球以上";
-  return selection;
-}
-
-function labelRisk(risk) {
-  const labels = {
-    low: "风险较低",
-    medium: "风险中等",
-    high: "风险偏高",
-  };
-  return labels[risk] || risk;
+function formatKickoff(value) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
 }
 
 function labelSource(source) {
@@ -71,59 +54,13 @@ function labelSource(source) {
   return labels[source] || source;
 }
 
-function labelOfficialMarket(market) {
+function labelSelection(selection) {
   const labels = {
-    winner: "胜平负",
-    handicap_winner: "让球胜平负",
-    score: "比分",
-    total_goals: "总进球",
-    half_full: "半全场",
+    home: "主胜",
+    draw: "平局",
+    away: "客胜",
   };
-  return labels[market] || market;
-}
-
-function labelOfficialMarketStatus(status) {
-  const labels = {
-    available: "已抓到",
-    missing: "缺失",
-    suspended: "暂停",
-    malformed: "异常",
-  };
-  return labels[status] || status;
-}
-
-function labelAdviceLevel(level) {
-  const labels = {
-    stable: "建议",
-    balanced: "谨慎",
-    small: "小额参考",
-    avoid: "放弃",
-    missing: "放弃",
-  };
-  return labels[level] || level;
-}
-
-function displayAdviceLabel(decision) {
-  const label = decision?.advice_label || labelAdviceLevel(decision?.advice_level);
-  if (decision?.market === "score" && (label === "放弃" || label === "仅作娱乐参考")) {
-    return "仅作娱乐参考";
-  }
-  return label;
-}
-
-function signedMoney(value) {
-  const number = Number(value || 0);
-  return `${number >= 0 ? "+" : "-"}${Math.abs(number).toFixed(1)}元`;
-}
-
-function formatKickoff(value) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
+  return labels[selection] || selection;
 }
 
 function movementClass(movement) {
@@ -136,6 +73,16 @@ function movementMark(movement) {
   if (movement === "up") return "↑";
   if (movement === "down") return "↓";
   return "→";
+}
+
+function renderFeedStatus(status) {
+  const healthClass = status.healthy ? "healthy" : "unhealthy";
+  const fallback = status.using_fallback ? " · 备用" : "";
+  nodes.feedStatus.innerHTML = `
+    <span class="feed-dot ${healthClass}"></span>
+    <span>${escapeHtml(labelSource(status.source))}${fallback}</span>
+    <span>${escapeHtml(status.message)}</span>
+  `;
 }
 
 function renderOddsMovement(match) {
@@ -158,17 +105,6 @@ function renderOddsMovement(match) {
   `;
 }
 
-function renderFeedStatus(status) {
-  const healthClass = status.healthy ? "healthy" : "unhealthy";
-  const fallback = status.using_fallback ? " · 备用" : "";
-  nodes.feedStatus.innerHTML = `
-    <span class="feed-dot ${healthClass}"></span>
-    <span>${escapeHtml(labelSource(status.source))}${fallback}</span>
-    <span>${escapeHtml(status.message)}</span>
-    ${status.last_success_at ? `<span>${escapeHtml(formatKickoff(status.last_success_at))}</span>` : ""}
-  `;
-}
-
 function renderMatches() {
   if (!state.matches.length) {
     nodes.matchList.innerHTML = '<p class="empty-state">当前窗口没有未开赛比赛。</p>';
@@ -181,7 +117,6 @@ function renderMatches() {
           <button class="match-main" data-match-id="${escapeAttribute(match.match_id)}">
             <strong>${escapeHtml(match.home.name)} vs ${escapeHtml(match.away.name)}</strong>
             <div>${escapeHtml(match.competition)} · ${escapeHtml(formatKickoff(match.kickoff_utc))}</div>
-            <span class="pill">数据质量 ${pct(match.context.data_quality)}</span>
             ${renderOddsMovement(match)}
           </button>
           <label class="parlay-toggle">
@@ -194,46 +129,22 @@ function renderMatches() {
     .join("");
 }
 
-function renderRecommendation(analysis) {
-  const decisions = analysis.decision_comparisons || [];
-  const primary =
-    decisions.find((decision) => decision.advice_label === "可作串关胆") ||
-    decisions.find((decision) => decision.advice_label === "可以参考") ||
-    decisions.find((decision) => decision.advice_label === "娱乐参考") ||
-    decisions[0];
-  if (!primary) {
-    nodes.recommendationSummary.innerHTML = "<p>当前没有可用建议。</p>";
-    return;
-  }
-  const warnings = primary.missing_info?.length
-    ? `<div class="warning-list">${primary.missing_info.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
-    : "";
-  const reasons = primary.reasons?.length
-    ? `<div class="reason-list">${primary.reasons.slice(0, 3).map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>`
-    : "";
-  nodes.recommendationSummary.innerHTML = `
-    <div class="pick-summary">
-      <div>
-        <span class="subtle">综合优先看</span>
-        <h2>${escapeHtml(primary.market_label)}</h2>
-      </div>
-      <span class="value-pill">${escapeHtml(primary.advice_label || labelAdviceLevel(primary.advice_level))}</span>
-    </div>
-    <div class="quick-stats">
-      <div><span>体彩最看好</span><strong>${escapeHtml(modelLineText(primary.official_model, primary.market_favorite?.label || "缺官方赔率"))}</strong></div>
-      <div><span>最高返还</span><strong>${escapeHtml(primary.best_return?.label || "无法计算")}</strong></div>
-      <div><span>2元一注返还</span><strong>${escapeHtml(primary.market_favorite?.payout_if_hit_2 == null ? "无法计算" : `${Number(primary.market_favorite.payout_if_hit_2).toFixed(2)}元`)}</strong></div>
-      <div><span>综合买法</span><strong>${escapeHtml(displayAdviceLabel(primary))}</strong></div>
-    </div>
-    <p class="plain-summary">${escapeHtml(primary.summary || "暂无综合说明。")}</p>
-    ${reasons}
-    ${warnings}
-  `;
+function money(value) {
+  if (value == null) return "--";
+  return `${Number(value).toFixed(2)}元`;
 }
 
-function renderAnalysis(analysis) {
-  renderRecommendation(analysis);
-  renderDecisionComparison(analysis.decision_comparisons || []);
+function odds(value) {
+  if (value == null) return "--";
+  return Number(value).toFixed(2);
+}
+
+function adviceReason(decision) {
+  if (decision.missing_info?.length) {
+    return decision.missing_info.join("；");
+  }
+  const label = decision.odds_selection_label || decision.market_favorite?.label || "--";
+  return `体彩当前最低赔率是 ${label}，按真实赔率给出参考。`;
 }
 
 function renderDecisionComparison(decisions) {
@@ -242,267 +153,89 @@ function renderDecisionComparison(decisions) {
     return;
   }
   nodes.decisionComparison.innerHTML = `
-    <div class="decision-list">
-      ${decisions
-        .map(
-          (decision) => `
-            <article class="decision-card ${escapeAttribute(decision.advice_level)}">
-              <div class="decision-title">
-                <strong>${escapeHtml(decision.market_label)}</strong>
-                <span>${escapeHtml(displayAdviceLabel(decision))}</span>
-              </div>
-              <div class="decision-columns">
-                <div>
-                  <span>体彩最看好</span>
-                  <strong>${escapeHtml(modelLineText(decision.official_model, decision.market_favorite?.label || "官方赔率缺失"))}</strong>
-                </div>
-                <div>
-                  <span>最高返还</span>
-                  ${renderDecisionOption(decision.best_return, "无法计算")}
-                </div>
-                <div>
-                  <span>综合买法</span>
-                  <strong>${escapeHtml(displayAdviceLabel(decision))}</strong>
-                  <small>${escapeHtml(decision.summary || "")}</small>
-                </div>
-              </div>
-              ${decision.market === "score" ? renderScoreCandidates(decision.score_candidates || []) : ""}
-              <div class="decision-missing">
-                <span>缺失信息</span>
-                <strong>${escapeHtml(decision.missing_info?.length ? decision.missing_info.join("；") : "无")}</strong>
-              </div>
-              ${
-                decision.reasons?.length
-                  ? `<div class="reason-list">${decision.reasons.map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>`
-                  : ""
-              }
-              ${
-                decision.warnings?.length
-                  ? `<div class="warning-list">${decision.warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
-                  : ""
-              }
-            </article>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
-}
-
-function modelLineText(line, fallback) {
-  if (!line) return fallback;
-  const label = line.selection_label || line.label || "暂无";
-  const probability = line.probability == null ? "" : ` · 折算占比 ${pct(line.probability)}`;
-  const odds = line.decimal_odds == null ? "" : ` · 赔率 ${Number(line.decimal_odds).toFixed(2)}`;
-  const payout =
-    line.payout_if_hit_2 == null ? "" : ` · 2元一注中出返还 ${Number(line.payout_if_hit_2).toFixed(2)}元`;
-  const confidence = line.confidence_label ? ` · 参考${line.confidence_label}` : "";
-  return `${label}${probability}${odds}${payout}${confidence}`;
-}
-
-function renderScoreCandidates(candidates) {
-  if (!candidates?.length) return "";
-  const visible = candidates.slice(0, 5);
-  const rows = visible
-    .map(
-      (candidate) => `
+    <table class="simple-table">
+      <thead>
         <tr>
-          <td><strong>${escapeHtml(candidate.label)}</strong></td>
-          <td>${candidate.official_probability == null ? "缺失" : pct(candidate.official_probability)}</td>
-          <td>${candidate.decimal_odds == null ? "缺失" : Number(candidate.decimal_odds).toFixed(2)}</td>
-          <td>${candidate.payout_if_hit_2 == null ? "无法计算" : `${Number(candidate.payout_if_hit_2).toFixed(2)}元`}</td>
-          <td>${escapeHtml(candidate.reason || "")}</td>
+          <th>玩法</th>
+          <th>推荐买法</th>
+          <th>赔率</th>
+          <th>2元一注返还</th>
+          <th>理由</th>
         </tr>
-      `,
-    )
-    .join("");
-  return `
-    <details class="score-candidates">
-      <summary>比分候选表</summary>
-      <table>
-        <thead>
-          <tr>
-            <th>比分</th>
-            <th>赔率折算占比</th>
-            <th>赔率</th>
-            <th>2元一注中出返还</th>
-            <th>理由</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </details>
+      </thead>
+      <tbody>
+        ${decisions
+          .map(
+            (decision) => `
+              <tr>
+                <td>${escapeHtml(decision.market_label)}</td>
+                <td><strong>${escapeHtml(decision.odds_selection_label || decision.market_favorite?.label || "赔率缺失")}</strong></td>
+                <td>${escapeHtml(odds(decision.odds_decimal || decision.market_favorite?.decimal_odds))}</td>
+                <td>${escapeHtml(money(decision.market_favorite?.payout_if_hit_2))}</td>
+                <td>${escapeHtml(adviceReason(decision))}</td>
+              </tr>
+            `,
+          )
+          .join("")}
+      </tbody>
+    </table>
   `;
 }
 
-function renderPayout(option) {
-  if (!option || option.payout_if_hit_2 == null) return "2元一注返还：无法计算";
-  return `2元一注返还：${Number(option.payout_if_hit_2).toFixed(2)}元`;
+function renderAnalysis(analysis) {
+  renderDecisionComparison(analysis.decision_comparisons || []);
 }
 
-function renderDecisionOption(option, fallback) {
-  if (!option) {
-    return `<strong>${escapeHtml(fallback)}</strong><small>2元一注返还：无法计算</small>`;
-  }
-  const probability = option.probability == null ? "" : ` · 折算占比 ${pct(option.probability)}`;
-  const odds = option.decimal_odds == null ? "" : ` · 赔率 ${Number(option.decimal_odds).toFixed(2)}`;
-  return `
-    <strong>${escapeHtml(option.label)}</strong>
-    <small>${escapeHtml(`${renderPayout(option)}${odds}${probability}`)}</small>
-  `;
-}
-
-function renderModelSuggestions(options) {
-  if (!options?.length) {
-    return '<strong>暂无</strong><small>体彩赔率不足</small>';
-  }
-  return `
-    <div class="decision-option-list">
-      ${options
-        .map(
-          (option) => `
-            <div>
-              <strong>${escapeHtml(option.label)}</strong>
-              <small>${escapeHtml(`${renderPayout(option)}${option.decimal_odds == null ? "" : ` · 赔率 ${Number(option.decimal_odds).toFixed(2)}`}${option.probability == null ? "" : ` · 折算占比 ${pct(option.probability)}`}`)}</small>
-            </div>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
-}
-
-function renderParlayList(parlays, title, emptyText) {
+function renderParlayList(parlays, title) {
   if (!parlays.length) {
-    return `<section class="parlay-section"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(emptyText)}</p></section>`;
+    return `<section class="parlay-section"><h3>${escapeHtml(title)}</h3><p>所选比赛没有足够的体彩真实赔率，暂时不能计算串关。</p></section>`;
   }
   return `
     <section class="parlay-section">
       <h3>${escapeHtml(title)}</h3>
-      ${parlays
-        .map(
-          (parlay) => `
-            <article class="parlay-card">
-              <div class="parlay-title">
-                <h3>${parlay.leg_count}串1 · ${escapeHtml(parlay.strategy_label || "")}</h3>
-                <span class="value-pill">${escapeHtml(parlay.value_label || "")}</span>
-              </div>
-              <div class="quick-stats parlay-stats">
-                <div><span>赔率折算参考</span><strong>${pct(parlay.combined_probability)}</strong></div>
-                <div><span>总赔率</span><strong>${parlay.combined_odds.toFixed(2)}</strong></div>
-                <div><span>2元一注中出返还</span><strong>${Number(parlay.payout_if_hit_2 || 0).toFixed(1)}元</strong></div>
-                <div><span>综合风险</span><strong>${escapeHtml(labelRisk(parlay.risk))}</strong></div>
-              </div>
-              <p class="plain-summary">${escapeHtml(parlay.explanation)}</p>
-              <div class="parlay-focus">
-                <div><span>相对稳的一关</span><strong>${escapeHtml(parlay.strongest_leg || "暂无")}</strong></div>
-                <div><span>风险最高的一关</span><strong>${escapeHtml(parlay.weakest_leg || "暂无")}</strong></div>
-              </div>
-              <div class="reason-list">${(parlay.reasons || []).map((reason) => `<div>${escapeHtml(reason)}</div>`).join("")}</div>
-              ${
-                parlay.warnings?.length
-                  ? `<div class="warning-list">${parlay.warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join("")}</div>`
-                  : ""
-              }
-              <div class="leg-list">
-                ${parlay.legs
-                  .map(
-                    (leg) => `
-                      <div class="leg-row">
-                        <strong>${escapeHtml(leg.label)}</strong>
-                        <span>赔率折算 ${pct(leg.probability)} · 赔率 ${leg.decimal_odds.toFixed(2)} · ${escapeHtml(leg.value_label || "")} · ${escapeHtml(labelRisk(leg.risk))}</span>
-                      </div>
-                    `,
-                  )
-                  .join("")}
-              </div>
-            </article>
-          `,
-        )
-        .join("")}
+      <table class="simple-table">
+        <thead>
+          <tr>
+            <th>串法</th>
+            <th>推荐组合</th>
+            <th>总赔率</th>
+            <th>2元一注返还</th>
+            <th>理由</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${parlays
+            .slice(0, 3)
+            .map(
+              (parlay) => `
+                <tr>
+                  <td>${parlay.leg_count}串1</td>
+                  <td>${parlay.legs.map((leg) => escapeHtml(leg.label)).join("<br>")}</td>
+                  <td>${Number(parlay.combined_odds || 0).toFixed(2)}</td>
+                  <td>${money(parlay.payout_if_hit_2)}</td>
+                  <td>${escapeHtml(parlay.explanation || "按真实赔率相乘计算。")}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
     </section>
   `;
 }
 
 function renderParlays(payload) {
-  if (payload.strategy_groups) {
-    const allParlays = payload.strategy_groups.flatMap((group) => group.parlays || []);
-    renderScatter(nodes.parlayScatter, allParlays);
-    if (payload.selected_match_ids?.length < 2) {
-      nodes.parlayResults.innerHTML = "<p>请先勾选至少两场比赛，再生成串关分析。</p>";
-      return;
-    }
-    nodes.parlayResults.innerHTML = payload.strategy_groups
-      .map((group) =>
-        renderParlayList(
-          group.parlays || [],
-          `${group.label} · 真实赔率串关`,
-          `${group.label}方案没有足够的体彩真实赔率，暂时不能计算串关。`,
-        ),
-      )
-      .join("");
+  if (!payload.strategy_groups) {
+    nodes.parlayResults.innerHTML = renderParlayList(payload.winner_parlays || [], "真实赔率串关");
     return;
   }
-
-  const winnerParlays = Array.isArray(payload) ? payload : payload.winner_parlays || [];
-  renderScatter(nodes.parlayScatter, winnerParlays);
-  if (!Array.isArray(payload) && payload.selected_match_ids?.length < 2) {
-    nodes.parlayResults.innerHTML = "<p>请先勾选至少两场比赛，再生成串关分析。</p>";
+  if (payload.selected_match_ids?.length < 2) {
+    nodes.parlayResults.innerHTML = "<p>请先勾选至少两场比赛，再生成串关建议。</p>";
     return;
   }
-  nodes.parlayResults.innerHTML = renderParlayList(
-    winnerParlays,
-    "真实赔率串关",
-    "所选比赛没有足够的体彩真实赔率，暂时不能计算串关。",
-  );
-}
-
-function renderOfficialOddsDiagnostics(payload) {
-  if (!nodes.officialOddsDiagnostics) return;
-  if (!payload.matches?.length) {
-    nodes.officialOddsDiagnostics.innerHTML = '<p class="empty-state">当前窗口没有官方赔率诊断数据。</p>';
-    return;
-  }
-  nodes.officialOddsDiagnostics.innerHTML = `
-    <div class="official-market-table">
-      ${payload.matches
-        .map(
-          (match) => `
-            <details>
-              <summary>
-                <strong>${escapeHtml(match.home_name)} vs ${escapeHtml(match.away_name)}</strong>
-                <span>${escapeHtml(match.competition)} · ${escapeHtml(formatKickoff(match.kickoff_utc))}</span>
-              </summary>
-              <div class="official-market-grid">
-                ${(match.markets || [])
-                  .map(
-                    (market) => `
-                      <div class="official-market-cell ${escapeAttribute(market.status)}">
-                        <strong>${escapeHtml(labelOfficialMarket(market.market))}</strong>
-                        <span>${escapeHtml(labelOfficialMarketStatus(market.status))}</span>
-                        <small>${Number(market.odds_count || 0)} 项官方赔率</small>
-                        ${
-                          market.odds?.length
-                            ? `<div class="official-odds-list">${market.odds
-                                .slice(0, 12)
-                                .map(
-                                  (quote) =>
-                                    `<span>${escapeHtml(quote.selection_label || quote.selection)} ${Number(quote.decimal_odds).toFixed(2)}</span>`,
-                                )
-                                .join("")}</div>`
-                            : `<em>${escapeHtml((market.warnings || []).join("；") || "暂无官方赔率")}</em>`
-                        }
-                      </div>
-                    `,
-                  )
-                  .join("")}
-              </div>
-            </details>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
+  nodes.parlayResults.innerHTML = payload.strategy_groups
+    .map((group) => renderParlayList(group.parlays || [], `${group.label} · 真实赔率串关`))
+    .join("");
 }
 
 async function loadAnalysis(matchId) {
@@ -515,8 +248,7 @@ async function loadParlays() {
     state.matches.some((match) => match.match_id === matchId),
   );
   if (selectedIds.length < 2) {
-    nodes.parlayScatter.innerHTML = "";
-    renderParlays({ selected_match_ids: selectedIds, winner_parlays: [], score_parlays: [] });
+    renderParlays({ selected_match_ids: selectedIds, strategy_groups: [] });
     return;
   }
   const strategies = [
@@ -540,16 +272,6 @@ async function loadFeedStatus() {
   renderFeedStatus(status);
 }
 
-async function loadOfficialOddsDiagnostics() {
-  if (!nodes.officialOddsDiagnostics) return;
-  try {
-    const payload = await fetchJson(`/api/official-odds/diagnostics?window=${state.window}`);
-    renderOfficialOddsDiagnostics(payload);
-  } catch (error) {
-    nodes.officialOddsDiagnostics.innerHTML = `<p class="empty-state">官方赔率诊断加载失败：${escapeHtml(error.message)}</p>`;
-  }
-}
-
 async function loadMatches() {
   state.matches = await fetchJson(`/api/matches?window=${state.window}`);
   const visibleIds = new Set(state.matches.map((match) => match.match_id));
@@ -560,7 +282,7 @@ async function loadMatches() {
   if (state.selectedMatchId) {
     await loadAnalysis(state.selectedMatchId);
   } else {
-    nodes.recommendationSummary.innerHTML = "<p>没有可分析的未开赛比赛。</p>";
+    nodes.decisionComparison.innerHTML = "<p>没有可分析的未开赛比赛。</p>";
   }
   await loadParlays();
 }
@@ -568,7 +290,6 @@ async function loadMatches() {
 async function refreshLiveData() {
   await loadFeedStatus();
   await loadMatches();
-  await loadOfficialOddsDiagnostics();
 }
 
 nodes.matchList.addEventListener("click", async (event) => {

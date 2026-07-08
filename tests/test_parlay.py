@@ -38,13 +38,13 @@ def test_balanced_parlay_returns_two_three_and_four_leg_options():
     assert parlays[0].combined_probability > parlays[-1].combined_probability
     assert parlays[-1].combined_odds > parlays[0].combined_odds
     assert parlays[0].strategy_label == "均衡"
-    assert parlays[0].probability_label.startswith("赔率折算参考")
+    assert parlays[0].probability_label == "真实赔率参考"
     assert parlays[0].value_label == "真实赔率组合"
     assert parlays[0].payout_if_hit_100 == pytest.approx(parlays[0].combined_odds * 100)
     assert parlays[0].expected_profit_100 == pytest.approx(parlays[0].expected_value * 100)
-    assert parlays[0].strongest_leg is not None
-    assert parlays[0].weakest_leg is not None
-    assert any("相对稳的一关" in reason for reason in parlays[0].reasons)
+    assert parlays[0].strongest_leg is None
+    assert parlays[0].weakest_leg is None
+    assert any("2元一注中出返还" in reason for reason in parlays[0].reasons)
     assert "EV" not in parlays[0].explanation
 
 

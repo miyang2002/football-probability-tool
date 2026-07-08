@@ -207,3 +207,7 @@ def test_selected_parlays_use_only_real_official_odds_from_all_markets():
     assert all(leg.value_label in {"体彩低赔方向", "体彩均衡方向", "体彩高回报方向"} for leg in parlay.legs)
     assert "真实赔率" in parlay.explanation
     assert "模型" not in parlay.explanation
+    forbidden = ["模型", "理论", "概率", "折算", "风险", "盈亏", "回报不够"]
+    combined_text = " ".join([parlay.explanation, parlay.value_label, *parlay.reasons, *parlay.warnings])
+    for word in forbidden:
+        assert word not in combined_text

@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>足球概率分析工具</title>
+    <title>足球赔率建议工具</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <header class="topbar">
       <div>
-        <h1>足球概率分析</h1>
-        <p>胜平负、比分、进球数、半场和串关分析</p>
+        <h1>足球赔率建议</h1>
+        <p>根据体彩真实赔率给出玩法和串关建议</p>
       </div>
       <div class="top-actions">
         <div id="feed-status" class="feed-status">数据源加载中</div>
@@ -33,34 +33,18 @@
       </aside>
 
       <section class="content">
-        <section class="panel hero-panel">
-          <div class="panel-title">一句话结论</div>
-          <div id="recommendation-summary"></div>
-        </section>
-
         <section class="panel">
-          <div class="panel-title">体彩赔率建议</div>
+          <div class="panel-title">五种玩法建议</div>
           <div id="decision-comparison"></div>
         </section>
 
         <section class="panel">
           <div class="parlay-header">
             <div>
-              <div class="panel-title">官方赔率完整性</div>
-              <p>中国体育彩票官方五类玩法抓取状态，不使用第三方赔率。</p>
-            </div>
-          </div>
-          <div id="official-odds-diagnostics"></div>
-        </section>
-
-        <section class="panel">
-          <div class="parlay-header">
-            <div>
               <div class="panel-title">串关分析</div>
-              <p>同时给出稳健、均衡、博收益三组真实赔率串关。</p>
+              <p>勾选至少两场比赛后，按真实赔率给出串关建议。</p>
             </div>
           </div>
-          <div id="parlay-scatter"></div>
           <div id="parlay-results" class="parlay-results"></div>
         </section>
       </section>
