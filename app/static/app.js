@@ -212,17 +212,19 @@ function renderAnalysis(analysis) {
 }
 
 function parlayReason(parlay) {
-  return `按表内总赔率乘以2元计算：${Number(parlay.combined_odds || 0).toFixed(2)} × 2 = ${money(parlay.payout_if_hit_2)}。`;
+  return `命中概率为各单关赔率反推概率相乘；返还按表内总赔率乘以2元计算：${Number(parlay.combined_odds || 0).toFixed(2)} × 2 = ${money(parlay.payout_if_hit_2)}。`;
 }
 
 function renderParlayList(parlays, title) {
-  const parlayByMarket = new Map();
-  (parlays || []).forEach((parlay) => {
-    const market = parlay.legs?.[0]?.market;
-    if (market && !parlayByMarket.has(market)) {
-      parlayByMarket.set(market, parlay);
-    }
+  const marketLabels = new Map(ODDS_MARKETS);
+  const visibleParlays = [...(parlays || [])].sort((left, right) => {
+    const leftIndex = ODDS_MARKETS.findIndex(([market]) => market === left.legs?.[0]?.market);
+    const rightIndex = ODDS_MARKETS.findIndex(([market]) => market === right.legs?.[0]?.market);
+    return leftIndex - rightIndex;
   });
+  if (!visibleParlays.length) {
+    return `<section class="parlay-section"><h3>${escapeHtml(title)}</h3><p>当前没有可按真实赔率计算的串关方案。</p></section>`;
+  }
   return `
     <section class="parlay-section">
       <h3>${escapeHtml(title)}</h3>
@@ -232,32 +234,23 @@ function renderParlayList(parlays, title) {
             <th>玩法</th>
             <th>串法</th>
             <th>推荐组合</th>
+            <th>命中概率（赔率反推）</th>
             <th>总赔率</th>
             <th>2元一注返还（总赔率 × 2元）</th>
             <th>理由</th>
           </tr>
         </thead>
         <tbody>
-          ${ODDS_MARKETS
-            .map(([market, marketLabel]) => {
-              const parlay = parlayByMarket.get(market);
-              if (!parlay) {
-                return `
-                  <tr>
-                    <td>${escapeHtml(marketLabel)}</td>
-                    <td>--</td>
-                    <td>赔率不足</td>
-                    <td>--</td>
-                    <td>--</td>
-                    <td>所选比赛中至少一场缺少${escapeHtml(marketLabel)}真实赔率。</td>
-                  </tr>
-                `;
-              }
+          ${visibleParlays
+            .map((parlay) => {
+              const market = parlay.legs?.[0]?.market;
+              const marketLabel = marketLabels.get(market) || market || "--";
               return `
                 <tr>
                   <td>${escapeHtml(marketLabel)}</td>
                   <td>${parlay.leg_count}串1</td>
                   <td>${parlay.legs.map((leg) => escapeHtml(leg.label)).join("<br>")}</td>
+                  <td>${probability(parlay.combined_probability)}</td>
                   <td>${Number(parlay.combined_odds || 0).toFixed(2)}</td>
                   <td>${money(parlay.payout_if_hit_2)}</td>
                   <td>${escapeHtml(parlayReason(parlay))}</td>
