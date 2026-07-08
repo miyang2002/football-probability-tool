@@ -3,10 +3,19 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-MarketName = Literal["winner", "total_goals", "over_under", "half_time", "score"]
+MarketName = Literal[
+    "winner",
+    "handicap_winner",
+    "score",
+    "total_goals",
+    "half_full",
+    "over_under",
+    "half_time",
+]
 StrategyName = Literal["conservative", "balanced", "return_seeking"]
 RiskLevel = Literal["low", "medium", "high"]
 OddsMovement = Literal["up", "down", "flat"]
+OfficialMarketStatus = Literal["available", "missing", "suspended", "malformed"]
 
 
 class TeamInput(BaseModel):
@@ -34,6 +43,8 @@ class OddsQuote(BaseModel):
     updated_at: str | None = None
     previous_decimal_odds: float | None = Field(default=None, gt=1)
     movement: OddsMovement | None = None
+    selection_label: str | None = None
+    raw_selection: str | None = None
 
 
 class MatchInput(BaseModel):
@@ -154,3 +165,31 @@ class SourceStatus(BaseModel):
     last_success_at: str | None = None
     refresh_seconds: int = Field(gt=0)
     message: str
+
+
+class OfficialMarketDiagnostic(BaseModel):
+    market: MarketName
+    label: str
+    status: OfficialMarketStatus
+    odds_count: int = Field(ge=0)
+    odds: list[OddsQuote] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class OfficialOddsMatchDiagnostic(BaseModel):
+    match_id: str
+    home_name: str
+    away_name: str
+    kickoff_utc: str
+    competition: str
+    markets: list[OfficialMarketDiagnostic]
+
+    @property
+    def missing_markets(self) -> list[str]:
+        return [market.market for market in self.markets if market.status != "available"]
+
+
+class OfficialOddsDiagnostics(BaseModel):
+    status: SourceStatus
+    match_count: int = Field(ge=0)
+    matches: list[OfficialOddsMatchDiagnostic]

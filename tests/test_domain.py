@@ -6,6 +6,8 @@ from app.domain import (
     MatchAnalysis,
     MatchContext,
     MatchInput,
+    OfficialMarketDiagnostic,
+    OfficialOddsMatchDiagnostic,
     OddsQuote,
     ParlayLeg,
     ParlayRecommendation,
@@ -35,6 +37,47 @@ def test_match_input_accepts_core_fields():
     assert match.home.name == "France"
     assert match.context.data_quality == 0.82
     assert match.odds[0].decimal_odds == 2.15
+
+
+def test_official_market_diagnostic_accepts_available_market_with_quotes():
+    diagnostic = OfficialMarketDiagnostic(
+        market="score",
+        label="比分",
+        status="available",
+        odds_count=2,
+        odds=[
+            OddsQuote(
+                market="score",
+                selection="2-1",
+                selection_label="2-1",
+                decimal_odds=9.0,
+                source="sporttery",
+                raw_selection="0102",
+            )
+        ],
+        warnings=[],
+    )
+
+    assert diagnostic.market == "score"
+    assert diagnostic.status == "available"
+    assert diagnostic.odds[0].selection_label == "2-1"
+    assert diagnostic.odds[0].raw_selection == "0102"
+
+
+def test_official_odds_match_diagnostic_lists_missing_markets():
+    diagnostic = OfficialOddsMatchDiagnostic(
+        match_id="sporttery-2040427",
+        home_name="阿根廷",
+        away_name="埃及",
+        kickoff_utc="2026-07-07T16:00:00Z",
+        competition="世界杯",
+        markets=[
+            OfficialMarketDiagnostic(market="winner", label="胜平负", status="available", odds_count=3),
+            OfficialMarketDiagnostic(market="score", label="比分", status="missing", odds_count=0),
+        ],
+    )
+
+    assert diagnostic.missing_markets == ["score"]
 
 
 def test_context_defaults_are_conservative():
