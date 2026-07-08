@@ -203,6 +203,10 @@ function renderAnalysis(analysis) {
   renderDecisionComparison(analysis.decision_comparisons || [], analysis.match);
 }
 
+function parlayReason(parlay) {
+  return `按表内总赔率乘以2元计算：${Number(parlay.combined_odds || 0).toFixed(2)} × 2 = ${money(parlay.payout_if_hit_2)}。`;
+}
+
 function renderParlayList(parlays, title) {
   if (!parlays.length) {
     return `<section class="parlay-section"><h3>${escapeHtml(title)}</h3><p>所选比赛没有足够的体彩真实赔率，暂时不能计算串关。</p></section>`;
@@ -230,7 +234,7 @@ function renderParlayList(parlays, title) {
                   <td>${parlay.legs.map((leg) => escapeHtml(leg.label)).join("<br>")}</td>
                   <td>${Number(parlay.combined_odds || 0).toFixed(2)}</td>
                   <td>${money(parlay.payout_if_hit_2)}</td>
-                  <td>${escapeHtml(parlay.explanation || "按真实赔率相乘计算。")}</td>
+                  <td>${escapeHtml(parlayReason(parlay))}</td>
                 </tr>
               `,
             )

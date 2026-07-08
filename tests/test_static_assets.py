@@ -40,7 +40,7 @@ def test_frontend_escapes_dynamic_html_and_attributes():
     assert "${escapeHtml(match.home.name)} vs ${escapeHtml(match.away.name)}" in app_js
     assert "${escapeHtml(match.competition)}" in app_js
     assert "${escapeHtml(status.message)}" in app_js
-    assert "escapeHtml(parlay.explanation ||" in app_js
+    assert "escapeHtml(parlayReason(parlay))" in app_js
     assert "escapeHtml(leg.label)" in app_js
 
 
@@ -131,6 +131,8 @@ def test_frontend_supports_minimal_real_odds_parlays():
     assert "2元一注" in app_js
     assert "真实赔率串关" in app_js
     assert "总赔率 × 2元" in app_js
+    assert "parlay.explanation" not in app_js
+    assert "按表内总赔率乘以2元计算" in app_js
     assert "比分串关" not in app_js
     assert "模型理论赔率" not in app_js
     assert "probability_label" not in app_js

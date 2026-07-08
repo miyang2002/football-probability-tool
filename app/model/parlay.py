@@ -413,8 +413,8 @@ def build_selected_winner_parlays(
                     strategy=strategy,
                     value_label=parlay_value_label(ev),
                     explanation=(
-                        f"真实胜平负赔率 {leg_count}串1："
-                        f"2元一注中出返还约 {combined_odds * stake:.1f} 元。"
+                        f"胜平负 {leg_count}串1：总赔率 {combined_odds:.2f}，"
+                        f"2元一注返还约 {combined_odds * stake:.2f} 元。"
                     ),
                     stake=stake,
                 )
