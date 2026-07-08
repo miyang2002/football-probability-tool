@@ -13,6 +13,14 @@ const nodes = {
   parlayResults: document.querySelector("#parlay-results"),
 };
 
+const ODDS_MARKETS = [
+  ["winner", "胜平负"],
+  ["handicap_winner", "让球胜平负"],
+  ["score", "比分"],
+  ["total_goals", "总进球"],
+  ["half_full", "半全场"],
+];
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -208,15 +216,20 @@ function parlayReason(parlay) {
 }
 
 function renderParlayList(parlays, title) {
-  if (!parlays.length) {
-    return `<section class="parlay-section"><h3>${escapeHtml(title)}</h3><p>所选比赛没有足够的体彩真实赔率，暂时不能计算串关。</p></section>`;
-  }
+  const parlayByMarket = new Map();
+  (parlays || []).forEach((parlay) => {
+    const market = parlay.legs?.[0]?.market;
+    if (market && !parlayByMarket.has(market)) {
+      parlayByMarket.set(market, parlay);
+    }
+  });
   return `
     <section class="parlay-section">
       <h3>${escapeHtml(title)}</h3>
       <table class="simple-table">
         <thead>
           <tr>
+            <th>玩法</th>
             <th>串法</th>
             <th>推荐组合</th>
             <th>总赔率</th>
@@ -225,19 +238,32 @@ function renderParlayList(parlays, title) {
           </tr>
         </thead>
         <tbody>
-          ${parlays
-            .slice(0, 3)
-            .map(
-              (parlay) => `
+          ${ODDS_MARKETS
+            .map(([market, marketLabel]) => {
+              const parlay = parlayByMarket.get(market);
+              if (!parlay) {
+                return `
+                  <tr>
+                    <td>${escapeHtml(marketLabel)}</td>
+                    <td>--</td>
+                    <td>赔率不足</td>
+                    <td>--</td>
+                    <td>--</td>
+                    <td>所选比赛中至少一场缺少${escapeHtml(marketLabel)}真实赔率。</td>
+                  </tr>
+                `;
+              }
+              return `
                 <tr>
+                  <td>${escapeHtml(marketLabel)}</td>
                   <td>${parlay.leg_count}串1</td>
                   <td>${parlay.legs.map((leg) => escapeHtml(leg.label)).join("<br>")}</td>
                   <td>${Number(parlay.combined_odds || 0).toFixed(2)}</td>
                   <td>${money(parlay.payout_if_hit_2)}</td>
                   <td>${escapeHtml(parlayReason(parlay))}</td>
                 </tr>
-              `,
-            )
+              `;
+            })
             .join("")}
         </tbody>
       </table>

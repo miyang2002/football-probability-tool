@@ -131,6 +131,9 @@ def test_frontend_supports_minimal_real_odds_parlays():
     assert "2元一注" in app_js
     assert "真实赔率串关" in app_js
     assert "总赔率 × 2元" in app_js
+    assert "ODDS_MARKETS" in app_js
+    assert "赔率不足" in app_js
+    assert ".slice(0, 3)" not in app_js
     assert "parlay.explanation" not in app_js
     assert "按表内总赔率乘以2元计算" in app_js
     assert "比分串关" not in app_js
