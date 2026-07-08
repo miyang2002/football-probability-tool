@@ -106,9 +106,9 @@ def sporttery_all_markets_payload() -> dict:
     payload = sporttery_payload()
     match = payload["value"]["matchInfoList"][0]["subMatchList"][0]
     match["crs"] = {
-        "s0100": "5.50",
-        "s0201": "9.00",
-        "s0000": "7.00",
+        "s01s00": "5.50",
+        "s02s01": "9.00",
+        "s00s00": "7.00",
         "updateDate": "2026-07-07",
         "updateTime": "20:07:51",
     }
@@ -177,7 +177,7 @@ def test_parse_sporttery_payload_builds_all_official_market_odds():
     score = next(quote for quote in match.odds if quote.market == "score" and quote.selection == "2-1")
     assert score.selection_label == "2-1"
     assert score.decimal_odds == 9.00
-    assert score.raw_selection == "s0201"
+    assert score.raw_selection == "s02s01"
 
     total = next(quote for quote in match.odds if quote.market == "total_goals" and quote.selection == "3")
     assert total.selection_label == "3球"

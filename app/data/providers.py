@@ -243,6 +243,21 @@ def build_handicap_winner_odds(
 
 
 def score_selection_from_key(raw_key: str) -> tuple[str, str] | None:
+    score_other = {
+        "s1sh": ("home_other", "胜其它"),
+        "s1sd": ("draw_other", "平其它"),
+        "s1sa": ("away_other", "负其它"),
+    }
+    if raw_key in score_other:
+        return score_other[raw_key]
+
+    if len(raw_key) == 6 and raw_key.startswith("s") and raw_key[3] == "s":
+        home_goals = raw_key[1:3]
+        away_goals = raw_key[4:6]
+        if home_goals.isdigit() and away_goals.isdigit():
+            label = f"{int(home_goals)}-{int(away_goals)}"
+            return label, label
+
     digits = raw_key.removeprefix("s")
     if len(digits) != 4 or not digits.isdigit():
         return None
