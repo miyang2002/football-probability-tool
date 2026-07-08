@@ -104,6 +104,14 @@ function labelAdviceLevel(level) {
   return labels[level] || level;
 }
 
+function displayAdviceLabel(decision) {
+  const label = decision?.advice_label || labelAdviceLevel(decision?.advice_level);
+  if (decision?.market === "score" && (label === "放弃" || label === "仅作娱乐参考")) {
+    return "仅作娱乐参考";
+  }
+  return label;
+}
+
 function signedMoney(value) {
   const number = Number(value || 0);
   return `${number >= 0 ? "+" : "-"}${Math.abs(number).toFixed(1)}元`;
@@ -213,10 +221,10 @@ function renderRecommendation(analysis) {
       <span class="value-pill">${escapeHtml(primary.advice_label || labelAdviceLevel(primary.advice_level))}</span>
     </div>
     <div class="quick-stats">
-      <div><span>模型建议</span><strong>${escapeHtml(topModel?.label || "暂无")}</strong></div>
-      <div><span>市场最看好</span><strong>${escapeHtml(primary.market_favorite?.label || "缺官方赔率")}</strong></div>
-      <div><span>赔率回报最好</span><strong>${escapeHtml(primary.best_return?.label || "无法计算")}</strong></div>
-      <div><span>综合建议</span><strong>${escapeHtml(primary.advice_label || labelAdviceLevel(primary.advice_level))}</strong></div>
+      <div><span>赔率模型看好</span><strong>${escapeHtml(modelLineText(primary.official_model, primary.market_favorite?.label || "缺官方赔率"))}</strong></div>
+      <div><span>球队资料模型</span><strong>${escapeHtml(modelLineText(primary.team_model, topModel?.label || "资料缺失"))}</strong></div>
+      <div><span>回报参考</span><strong>${escapeHtml(primary.best_return?.label || "无法计算")}</strong></div>
+      <div><span>综合方案</span><strong>${escapeHtml(displayAdviceLabel(primary))}</strong></div>
     </div>
     <p class="plain-summary">${escapeHtml(primary.summary || "暂无综合说明。")}</p>
     ${reasons}
@@ -242,27 +250,28 @@ function renderDecisionComparison(decisions) {
             <article class="decision-card ${escapeAttribute(decision.advice_level)}">
               <div class="decision-title">
                 <strong>${escapeHtml(decision.market_label)}</strong>
-                <span>${escapeHtml(decision.advice_label || labelAdviceLevel(decision.advice_level))}</span>
+                <span>${escapeHtml(displayAdviceLabel(decision))}</span>
               </div>
               <div class="decision-columns">
                 <div>
-                  <span>模型推荐</span>
-                  ${renderModelSuggestions(decision.model_suggestions || [])}
+                  <span>赔率模型看好</span>
+                  <strong>${escapeHtml(modelLineText(decision.official_model, decision.market_favorite?.label || "官方赔率缺失"))}</strong>
                 </div>
                 <div>
-                  <span>市场最看好</span>
-                  ${renderDecisionOption(decision.market_favorite, "缺官方赔率")}
+                  <span>球队资料模型</span>
+                  <strong>${escapeHtml(modelLineText(decision.team_model, "球队资料缺失"))}</strong>
                 </div>
                 <div>
-                  <span>赔率回报最好</span>
+                  <span>回报参考</span>
                   ${renderDecisionOption(decision.best_return, "无法计算")}
                 </div>
                 <div>
-                  <span>综合建议</span>
-                  <strong>${escapeHtml(decision.advice_label || labelAdviceLevel(decision.advice_level))}</strong>
+                  <span>综合方案</span>
+                  <strong>${escapeHtml(displayAdviceLabel(decision))}</strong>
                   <small>${escapeHtml(decision.summary || "")}</small>
                 </div>
               </div>
+              ${decision.market === "score" ? renderScoreCandidates(decision.score_candidates || []) : ""}
               <div class="decision-missing">
                 <span>缺失信息</span>
                 <strong>${escapeHtml(decision.missing_info?.length ? decision.missing_info.join("；") : "无")}</strong>
@@ -282,6 +291,58 @@ function renderDecisionComparison(decisions) {
         )
         .join("")}
     </div>
+  `;
+}
+
+function modelLineText(line, fallback) {
+  if (!line) return fallback;
+  const label = line.selection_label || line.label || "暂无";
+  const probability = line.probability == null ? "" : ` · 概率 ${pct(line.probability)}`;
+  const odds = line.decimal_odds == null ? "" : ` · 赔率 ${Number(line.decimal_odds).toFixed(2)}`;
+  const payout =
+    line.payout_if_hit_2 == null ? "" : ` · 2元一注中出返还 ${Number(line.payout_if_hit_2).toFixed(2)}元`;
+  const confidence = line.confidence_label ? ` · 置信度${line.confidence_label}` : "";
+  return `${label}${probability}${odds}${payout}${confidence}`;
+}
+
+function renderScoreCandidates(candidates) {
+  if (!candidates?.length) return "";
+  const visible = candidates.slice(0, 5);
+  const rows = visible
+    .map(
+      (candidate) => `
+        <tr>
+          <td><strong>${escapeHtml(candidate.label)}</strong>${candidate.model_scoreline ? `<small>模型比分 ${escapeHtml(candidate.model_scoreline)}</small>` : ""}</td>
+          <td>${candidate.official_probability == null ? "缺失" : pct(candidate.official_probability)}</td>
+          <td>${candidate.team_probability == null ? "缺失" : pct(candidate.team_probability)}</td>
+          <td>${candidate.combined_probability == null ? "缺失" : pct(candidate.combined_probability)}</td>
+          <td>${candidate.decimal_odds == null ? "缺失" : Number(candidate.decimal_odds).toFixed(2)}</td>
+          <td>${candidate.payout_if_hit_2 == null ? "无法计算" : `${Number(candidate.payout_if_hit_2).toFixed(2)}元`}</td>
+          <td>${escapeHtml(candidate.confidence_label || "低")}</td>
+          <td>${escapeHtml(candidate.reason || "")}</td>
+        </tr>
+      `,
+    )
+    .join("");
+  return `
+    <details class="score-candidates">
+      <summary>比分候选表</summary>
+      <table>
+        <thead>
+          <tr>
+            <th>比分</th>
+            <th>赔率概率</th>
+            <th>资料概率</th>
+            <th>综合概率</th>
+            <th>赔率</th>
+            <th>2元一注中出返还</th>
+            <th>置信度</th>
+            <th>理由</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </details>
   `;
 }
 
@@ -341,7 +402,7 @@ function renderParlayList(parlays, title, emptyText) {
                 <div><span>预计命中</span><strong>${pct(parlay.combined_probability)}</strong></div>
                 <div><span>总赔率</span><strong>${parlay.combined_odds.toFixed(2)}</strong></div>
                 <div><span>2元一注中出返还</span><strong>${Number(parlay.payout_if_hit_2 || 0).toFixed(1)}元</strong></div>
-                <div><span>2元一注理论盈亏</span><strong>${signedMoney(parlay.expected_profit_2)}</strong></div>
+                <div><span>综合风险</span><strong>${escapeHtml(labelRisk(parlay.risk))}</strong></div>
               </div>
               <p class="plain-summary">${escapeHtml(parlay.explanation)}</p>
               <div class="parlay-focus">

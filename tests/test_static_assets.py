@@ -77,20 +77,38 @@ def test_frontend_uses_plain_chinese_analysis_copy():
 
     assert "一句话结论" in html
     assert "模型与赔率建议" in html
-    assert "模型推荐" in app_js
-    assert "市场最看好" in app_js
-    assert "赔率回报最好" in app_js
-    assert "综合建议" in app_js
+    assert "赔率模型看好" in app_js
+    assert "球队资料模型" in app_js
+    assert "综合方案" in app_js
     assert "2元一注返还" in app_js
     assert "缺失信息" in app_js
     assert "赔率是否划算" not in app_js
     assert "最稳一关" in app_js
-    assert "2元一注理论盈亏" in app_js
+    assert "2元一注理论盈亏" not in app_js
     assert "期望值" not in app_js
     assert ">EV<" not in app_js
     assert "每100元" not in app_js
     assert "模型比赔率" not in app_js
     assert "赔率偏低" not in app_js
+
+
+def test_frontend_renders_two_model_plain_chinese_table():
+    app_js = (STATIC / "app.js").read_text()
+
+    assert "赔率模型看好" in app_js
+    assert "球队资料模型" in app_js
+    assert "综合方案" in app_js
+    assert "2元一注中出返还" in app_js
+    assert "仅作娱乐参考" in app_js
+    assert "score_candidates" in app_js
+
+
+def test_frontend_rejects_technical_ev_copy_after_redesign():
+    app_js = (STATIC / "app.js").read_text()
+
+    forbidden = ["EV", "期望值", "每100元", "模型比赔率", "赔率偏低", "理论盈亏"]
+    for word in forbidden:
+        assert word not in app_js
 
 
 def test_frontend_contains_official_odds_diagnostics_view():

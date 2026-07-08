@@ -618,6 +618,36 @@ p {
   font-weight: 700;
 }
 
+.score-candidates {
+  margin-top: 12px;
+}
+
+.score-candidates summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.score-candidates table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.score-candidates th,
+.score-candidates td {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.10);
+  padding: 8px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.score-candidates small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 svg {
   width: 100%;
   height: auto;
